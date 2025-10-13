@@ -10,8 +10,8 @@ _LOGGER = logging.getLogger(__name__)
 
 from .const import DOMAIN
 
-# --- PlantBot minimal validator (added) ---
-def _plantbot_value_is_valid(props, value):
+# --- Taubenschießer minimal validator (added) ---
+def _taubenschiesser_value_is_valid(props, value):
     # Basic empty checks
     if value is None or (isinstance(value, str) and value.strip().lower() in ("", "null", "none")):
         return False
@@ -75,22 +75,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for key, props in SENSOR_TYPES.items():
             value = station.get(key)
             if not props["optional"] or key in station:
-                if props.get('optional', False) and not _plantbot_value_is_valid(props, value):
+                if props.get('optional', False) and not _taubenschiesser_value_is_valid(props, value):
                     continue
-                entities.append(PlantbotSensor(coordinator, station_id, key, props, station.get("name", f"Station {station_id}")))
+                entities.append(TaubenschiesserSensor(coordinator, station_id, key, props, station.get("name", f"Station {station_id}")))
 
         # 2. Sensoren aus verschachteltem JSON
         sensoren = station.get("Sensoren", {})
 
         # Environment-Sensoren
-        env = sensoren.get("PlantBot", {})
+        env = sensoren.get("Taubenschießer", {})
         for key, value in env.items():
             props = SENSOR_TYPES.get(key)
             if props:
                 # Validierung für Environment-Sensoren
-                if props.get('optional', False) and not _plantbot_value_is_valid(props, value):
+                if props.get('optional', False) and not _taubenschiesser_value_is_valid(props, value):
                     continue
-                entities.append(PlantbotSensor(coordinator, station_id, f"env_{key}", props, station.get("name", f"Station {station_id}")))
+                entities.append(TaubenschiesserSensor(coordinator, station_id, f"env_{key}", props, station.get("name", f"Station {station_id}")))
 
         # Vereinheitlichte Sensor-Erstellung für modbusSens und BTSensoren
         server_sensors = station.get("sensors", {})
@@ -159,11 +159,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
                             else:
                                 props["name"] = props["name_template"].format(addr=addr_str)
                         
-                        entities.append(PlantbotSensor(coordinator, station_id, key, props, station.get("name", f"Station {station_id}")))
+                        entities.append(TaubenschiesserSensor(coordinator, station_id, key, props, station.get("name", f"Station {station_id}")))
                 
     async_add_entities(entities)
 
-class PlantbotSensor(SensorEntity):
+class TaubenschiesserSensor(SensorEntity):
     def __init__(self, coordinator, station_id, key, props, station_name):
         self.coordinator = coordinator
         self.station_id = str(station_id)
@@ -219,10 +219,10 @@ class PlantbotSensor(SensorEntity):
             if value is not None:
                 break
         
-        # Environment-Sensoren (PlantBot)
+        # Environment-Sensoren (Taubenschießer)
         if value is None and self.key.startswith("env_"):
             env_key = self.key.replace("env_", "")
-            env = sensoren.get("PlantBot", {})
+            env = sensoren.get("Taubenschießer", {})
             value = env.get(env_key)
             # Fallback: auch direkt in station_data suchen
             if value is None:
@@ -231,7 +231,7 @@ class PlantbotSensor(SensorEntity):
             value = station_data.get(self.key)
 
         # Validierung (0 ist erlaubt, sofern ignore_zero=False)
-        if not _plantbot_value_is_valid(self._props, value):
+        if not _taubenschiesser_value_is_valid(self._props, value):
             return None
 
         # Spezielle Umrechnung für bestimmte Sensoren
@@ -261,7 +261,7 @@ class PlantbotSensor(SensorEntity):
         info = {
             "identifiers": {(DOMAIN, f"station_{self.station_id}")},
             "name": self.station_name,
-            "manufacturer": "PlantBot",
+            "manufacturer": "Taubenschießer",
             "model": "Bewässerungsstation",
         }
         if self.station_ip:

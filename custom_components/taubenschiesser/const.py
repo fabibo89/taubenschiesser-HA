@@ -1,1 +1,1 @@
-DOMAIN = "plantbot"
+DOMAIN = "taubenschiesser"

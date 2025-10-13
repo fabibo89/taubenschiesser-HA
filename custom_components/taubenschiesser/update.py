@@ -21,11 +21,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
         station_ip = station.get("ip")
         
         # Erstelle immer eine Update-Entity (auch wenn kein Update benötigt wird)
-        entities.append(PlantbotFirmwareUpdate(coordinator, station_id, station.get("name", f"Station {station_id}"), station_ip))
+        entities.append(TaubenschiesserFirmwareUpdate(coordinator, station_id, station.get("name", f"Station {station_id}"), station_ip))
     
     async_add_entities(entities)
 
-class PlantbotFirmwareUpdate(UpdateEntity):
+class TaubenschiesserFirmwareUpdate(UpdateEntity):
 
     def __init__(self, coordinator, station_id, station_name,station_ip):
         self.coordinator = coordinator
@@ -33,7 +33,7 @@ class PlantbotFirmwareUpdate(UpdateEntity):
         self.station_name = station_name
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
         self._station_ip = station_ip
-        self._attr_unique_id = f"plantbot_update_{self.station_id}"
+        self._attr_unique_id = f"taubenschiesser_update_{self.station_id}"
         self._attr_name = f"{station_name} Firmware Update"
         self._attr_title = f"{station_name} Firmware"
         self._attr_in_progress = False
@@ -47,8 +47,8 @@ class PlantbotFirmwareUpdate(UpdateEntity):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"station_{self.station_id}")},
             name=self.station_name,
-            manufacturer="PlantBot",
-            model="Bewässerungsstation",
+            manufacturer="Taubenschießer",
+            model="Taubenschießer",
             configuration_url= f"http://{self._station_ip}"
         )
 
@@ -117,7 +117,7 @@ class PlantbotFirmwareUpdate(UpdateEntity):
 
     @property
     def release_url(self) -> str | None:
-        return "https://github.com/fabibo89/plantbot-OTA/releases"
+        return "https://github.com/fabibo89/taubenschiesser-OTA/releases"
 
     async def async_update(self):
         await self.coordinator.async_request_refresh()

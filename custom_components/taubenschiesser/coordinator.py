@@ -9,7 +9,7 @@ import asyncio
 
 _LOGGER = logging.getLogger(__name__)
 
-class PlantbotCoordinator(DataUpdateCoordinator):
+class TaubenschiesserCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, server_url):
         self.hass = hass
         self.server_url = server_url
@@ -21,36 +21,7 @@ class PlantbotCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=30),
         )
 
-    def _merge_valve_data(self, server_valves, device_valves):
-        """Führt Server-Ventil-Metadaten mit Device-Status zusammen.
-        
-        Server: [{"id": 21, "name": "P:1-V:1 Zucchini", "vent": 1}]
-        Device: [{"id": 1, "name": "Ventil 1", "state": "closed"}]
-        Mapping: server.vent == device.id
-        """
-        # Device-States nach ID indexieren für schnellen Zugriff
-        device_states = {valve["id"]: valve.get("state", "unknown") for valve in device_valves}
-        
-        merged = []
-        for server_valve in server_valves:
-            vent_id = server_valve.get("vent")
-            if vent_id and vent_id in device_states:
-                # Server-Metadaten + Device-Status zusammenführen
-                merged_valve = server_valve.copy()
-                merged_valve["state"] = device_states[vent_id]
-                merged.append(merged_valve)
-                _LOGGER.debug("Ventil %s (%s) hat Status: %s", 
-                            server_valve.get("name", f"ID {server_valve.get('id')}"), 
-                            vent_id, device_states[vent_id])
-            else:
-                # Server-Ventil ohne Device-Status (Fallback: unknown)
-                merged_valve = server_valve.copy()
-                merged_valve["state"] = "unknown"
-                merged.append(merged_valve)
-                _LOGGER.warning("Ventil %s (vent=%s) hat keinen Device-Status", 
-                              server_valve.get("name", f"ID {server_valve.get('id')}"), vent_id)
-        
-        return merged
+
 
     async def _async_update_data(self):
         try:
@@ -90,17 +61,10 @@ class PlantbotCoordinator(DataUpdateCoordinator):
                                             if "name" in device_data:
                                                 result[key_station_id]["name"] = device_data["name"]
                                             
-                                            # Ventil-Daten intelligent zusammenführen
-                                            server_valves = result[key_station_id].get("valves", [])
-                                            device_valves = device_data.get("valves", [])
-                                            merged_valves = self._merge_valve_data(server_valves, device_valves)
-                                            
-                                            # Device-Daten übernehmen, aber Ventile separat behandeln
+                                            # Device-Daten übernehmen
                                             result[key_station_id].update(device_data)
-                                            result[key_station_id]["valves"] = merged_valves
                                             
-                                            _LOGGER.debug("Ventil-Daten für Station %s zusammengeführt: %d Server-Ventile, %d Device-States", 
-                                                        station_id, len(server_valves), len(device_valves))
+                                            _LOGGER.debug("Daten für Station %s aktualisiert", station_id)
                                         else:
                                             self.last_update_success = False
                                             _LOGGER.warning("Gerät %s antwortet nicht wie erwartet (%s)", ip, dev_resp.status)
@@ -144,11 +108,11 @@ class PlantbotCoordinator(DataUpdateCoordinator):
             self.last_update_success = False
             raise
         except aiohttp.ClientError as err:
-            _LOGGER.error("Verbindung zu PlantBot fehlgeschlagen: %s", err)
+            _LOGGER.error("Verbindung zu Taubenschießer fehlgeschlagen: %s", err)
             self.last_update_success = False
             raise UpdateFailed from err
         except Exception as err:
-            _LOGGER.exception("Fehler bei der Kommunikation mit PlantBot:")
+            _LOGGER.exception("Fehler bei der Kommunikation mit Taubenschießer:")
             self.last_update_success = False
             raise UpdateFailed(f"Fehler: {err}")
 

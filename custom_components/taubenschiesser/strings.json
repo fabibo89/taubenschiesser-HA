@@ -1,12 +1,12 @@
 {
-  "domain": "plantbot",
-  "name": "PlantBot Bewässerung",
+  "domain": "taubenschiesser",
+  "name": "Taubenschießer",
   "config_flow": {
-    "title": "PlantBot Server",
+    "title": "Taubenschießer Server",
     "step": {
       "user": {
         "title": "Verbindung einrichten",
-        "description": "Gib die Serveradresse deines PlantBot-Systems ein.",
+        "description": "Gib die Serveradresse deines Taubenschießer-Systems ein.",
         "data": {
           "server": "Server-URL"
         }

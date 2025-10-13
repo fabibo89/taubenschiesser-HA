@@ -15,11 +15,11 @@ BUTTON_TYPES = {
         "icon": "mdi:restart",
         "use_server": False
     },
-    "start_irrigation": {
-        "name": "Start Bewässerung",
-        "url_path": "/HA/startQueue/{id}",
-        "icon": "mdi:water-pump",
-        "use_server": True
+    "start_shooting": {
+        "name": "Start Schießvorgang",
+        "url_path": "/HA/startShooting/{id}",
+        "icon": "mdi:target",
+        "use_server": False
     }
     # Weitere Buttons kannst du hier ergänzen ...
 }
@@ -35,14 +35,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
         for button_key, button_conf in BUTTON_TYPES.items():
             button_name = f"{button_conf['name']} {station_name}"
-            if button_key == "start_irrigation" and station.get("source") != "server":
+            if button_key == "start_shooting" and station.get("source") != "server":
                 _LOGGER.debug("Überspringe %s für %s (nicht 'server')", button_key, station_id)
                 continue
             server_url = entry.data["server"] 
             _LOGGER.debug("Erzeuge Button: %s (station_id=%s, type=%s)", button_name, station_id, button_key)
 
             buttons.append(
-                    PlantBotButton(
+                    TaubenschiesserButton(
                         coordinator,
                         hass,
                         station_name,
@@ -57,14 +57,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(buttons, True)
 
 
-class PlantBotButton(ButtonEntity):
+class TaubenschiesserButton(ButtonEntity):
     @property
     def device_info(self):
         return {
             "identifiers": {(DOMAIN, f"station_{self.station_id}")},
             "name": self.station_name,
-            "manufacturer": "PlantBot",
-            "model": "Bewässerungsstation",
+            "manufacturer": "Taubenschießer",
+            "model": "Taubenschießer",
             "configuration_url": f"http://{self.station_ip}"
 
         }    
