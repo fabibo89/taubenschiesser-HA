@@ -1,0 +1,8 @@
+custom_components/.DS_Store
+custom_components/taubenschiesser/__pycache__/__init__.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/button.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/config_flow.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/const.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/coordinator.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/sensor.cpython-313.pyc
+custom_components/taubenschiesser/__pycache__/update.cpython-313.pyc

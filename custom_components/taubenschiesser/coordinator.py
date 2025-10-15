@@ -21,98 +21,52 @@ class TaubenschiesserCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=30),
         )
 
-
-
     async def _async_update_data(self):
+        """Ruft Daten vom Taubenschießer-Gerät ab."""
         try:
-            # Versuche zuerst Server-Endpunkt
-            async with self.session.get(f"{self.server_url}/status", ssl=False) as response:
-                _LOGGER.debug("Empfangene Daten vom Server/Device: %s", f"{self.server_url}/status")
+            url = f"{self.server_url}/status"
+            _LOGGER.debug("Taubenschießer: Hole Daten von %s", url)
+            
+            timeout = aiohttp.ClientTimeout(total=10, connect=5)
+            async with self.session.get(url, ssl=False, timeout=timeout) as response:
                 if response.status == 200:
                     raw = await response.json()
-                    _LOGGER.debug("Antwort-JSON: %s", raw)
-                    # Prüfe ob Server-Antwort (Liste von Stationen)
-                    if raw.get("status") == "success" and isinstance(raw.get("data"), list):
-                        basis_data = raw["data"]
-                        _LOGGER.debug("Server-Basis-Daten: %s", basis_data)
-                        result = {f"station_{station['id']}": station for station in basis_data}
+                    _LOGGER.debug("Empfangene Daten: %s", raw)
+                    
+                    # Prüfe auf Taubenschießer-Format
+                    if "ip" in raw and "Taubenschiesser" in raw and isinstance(raw, dict):
+                        # Station ID aus IP ableiten
+                        station_id = raw.get("ip", "unknown").replace(".", "_")
+                        station_name = f"Taubenschießer {raw.get('ip', 'Device')}"
                         
-                        # Server-ID aus URL extrahieren (z.B. aus http://192.168.1.100:3000)
-                        server_id = self.server_url.split("://")[1].split(":")[0].split(".")[-1]  # Letztes Oktett der IP
+                        # Daten für Home Assistant aufbereiten
+                        device_data = raw.copy()
+                        device_data["name"] = station_name
+                        device_data["source"] = "device"
+                        device_data["id"] = station_id
                         
-                        # Für jede Station: Hole Detaildaten vom Gerät, falls IP vorhanden
-                        for station in basis_data:
-                            ip = station.get("ip")
-                            station_id = station['id']
-                            key_station_id = f"station_{station_id}"
-                            
-                            # Markiere als Server-Connection und füge Server-ID hinzu
-                            result[key_station_id]["source"] = "server"
-                            result[key_station_id]["server_id"] = server_id
-                            
-                            if ip:
-                                try:
-                                    async with self.session.get(f"http://{ip}/status", timeout=5) as dev_resp:
-                                        if dev_resp.status == 200:
-                                            device_data = await dev_resp.json()
-                                            _LOGGER.debug("Device-Daten von %s: %s", ip, device_data)
-                                            
-                                            # Name aus Gerätedaten übernehmen, falls vorhanden
-                                            if "name" in device_data:
-                                                result[key_station_id]["name"] = device_data["name"]
-                                            
-                                            # Device-Daten übernehmen
-                                            result[key_station_id].update(device_data)
-                                            
-                                            _LOGGER.debug("Daten für Station %s aktualisiert", station_id)
-                                        else:
-                                            self.last_update_success = False
-                                            _LOGGER.warning("Gerät %s antwortet nicht wie erwartet (%s)", ip, dev_resp.status)
-                                except Exception as e:
-                                    _LOGGER.warning("Fehler beim Statusabruf von Gerät %s: %s", ip, e)
-                                    self.last_update_success = False
-                        return result
-                    # Einzelgerät-Modus: Daten direkt als Station
-                    elif "status" in raw and "data" in raw and isinstance(raw["data"], dict):
-                        # Einzelgerät liefert ein dict unter "data"
-                        station = raw["data"]
-                        station_id = station.get("id", "single")
-                        station_name = station.get("name") or station.get("ip") or f"Station {station_id}"
-                        station["name"] = station_name
-                        station["source"] = "device"  # Markiere als Device-Connection
-                        return {f"station_{station_id}": station}
+                        _LOGGER.debug("Taubenschießer-Gerät erkannt: %s", station_name)
+                        return {f"station_{station_id}": device_data}
                     else:
-                        # Fallback: Versuche /status direkt (Einzelgerät)
-                        async with self.session.get(f"{self.server_url}/status", ssl=False) as dev_resp:
-                            if dev_resp.status == 200:
-                                device_data = await dev_resp.json()
-                                station_id = device_data.get("id", "single")
-                                station_name = device_data.get("name") or device_data.get("ip") or f"Station {station_id}"
-                                device_data["name"] = station_name
-                                device_data["source"] = "device"  # Markiere als Device-Connection
-                                return {f"station_{station_id}": device_data}
-                            else:
-                                raise UpdateFailed(f"Status {dev_resp.status}")
+                        _LOGGER.error("Unerwartetes JSON-Format: %s", raw)
+                        raise UpdateFailed("Unbekanntes JSON-Format vom Gerät")
                 else:
-                    # Kein Erfolg beim Server-Endpunkt, versuche Einzelgerät
-                    async with self.session.get(f"{self.server_url}/status", ssl=False) as dev_resp:
-                        if dev_resp.status == 200:
-                            device_data = await dev_resp.json()
-                            station_id = device_data.get("id", "single")
-                            device_data["source"] = "device"  # Markiere als Device-Connection
-                            return {f"station_{station_id}": device_data}
-                        else:
-                            raise UpdateFailed(f"Status {dev_resp.status}")
+                    _LOGGER.error("HTTP Fehler %s von %s", response.status, url)
+                    raise UpdateFailed(f"HTTP {response.status}")
+                    
         except asyncio.CancelledError:
-            _LOGGER.warning("Abbruch während Datenabruf – vermutlich durch Shutdown oder Timeout")
+            _LOGGER.warning("Update abgebrochen")
             self.last_update_success = False
             raise
+        except asyncio.TimeoutError as err:
+            _LOGGER.warning("Timeout bei %s - Gerät nicht erreichbar", self.server_url)
+            self.last_update_success = False
+            raise UpdateFailed(f"Timeout: {self.server_url}") from err
         except aiohttp.ClientError as err:
-            _LOGGER.error("Verbindung zu Taubenschießer fehlgeschlagen: %s", err)
+            _LOGGER.warning("Netzwerkfehler bei %s: %s", self.server_url, err)
             self.last_update_success = False
-            raise UpdateFailed from err
+            raise UpdateFailed(f"Netzwerkfehler: {err}") from err
         except Exception as err:
-            _LOGGER.exception("Fehler bei der Kommunikation mit Taubenschießer:")
+            _LOGGER.exception("Unerwarteter Fehler:")
             self.last_update_success = False
-            raise UpdateFailed(f"Fehler: {err}")
-
+            raise UpdateFailed(f"Fehler: {err}") from err

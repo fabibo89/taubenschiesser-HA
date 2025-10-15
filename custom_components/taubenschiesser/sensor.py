@@ -39,17 +39,16 @@ def _taubenschiesser_value_is_valid(props, value):
 
 SENSOR_TYPES = {
     
-    "temp": {"name": "Temperatur", "unit": UnitOfTemperature.CELSIUS,"device_class":SensorDeviceClass.TEMPERATURE ,"state_class": SensorStateClass.MEASUREMENT, "optional": True,"ignore_zero": True, 'valid_range': (-30.0, 60.0)},
-    "hum": {"name": "Feuchtigkeit", "unit": PERCENTAGE,"device_class":SensorDeviceClass.HUMIDITY,"state_class": SensorStateClass.MEASUREMENT, "optional": True,"ignore_zero": True, 'valid_range': (0.0, 100.0)},
-    "pressure": {"name": "Luftdruck", "unit": UnitOfPressure.HPA,"device_class":None, "state_class": SensorStateClass.MEASUREMENT,"optional": True,"ignore_zero": True,"icon": "mdi:gauge", 'valid_range': (800.0, 1100.0)},
-    "water_level": {"name": "Wasserstand", "unit": PERCENTAGE,"device_class":None,"state_class": SensorStateClass.MEASUREMENT, "optional": True, 'valid_range': (0.0, 100.0)},
-    "jobs": {"name": "Jobs", "unit": "count","device_class":None  , "state_class": SensorStateClass.MEASUREMENT,"optional": True,"icon": "mdi:playlist-play","ignore_zero": False},
-    "flow": {"name": "Flow", "unit": None,"device_class":None, "state_class": SensorStateClass.TOTAL,"optional": True,"icon": "mdi:water-pump"},
-    "lastVolume": {"name": "Volume", "unit": 'ml',"device_class":None ,"state_class": SensorStateClass.MEASUREMENT, "optional": True,"icon": "mdi:water"},
     "status": {"name": "Status", "unit": None,"device_class":None, "optional": False,"icon": "mdi:information"},
     "wifi": {"name": "WIFI", "unit": SIGNAL_STRENGTH_DECIBELS_MILLIWATT,"device_class":SensorDeviceClass.SIGNAL_STRENGTH,"state_class": SensorStateClass.MEASUREMENT, "optional": False, 'valid_range': (-100.0, -20.0)},
     "runtime": {"name": "Runtime", "unit": "min" ,"device_class":SensorDeviceClass.DURATION,"state_class": SensorStateClass.MEASUREMENT, "optional": True, "convert_from_seconds": True},
-    "water_runtime": {"name": "Wasser Runtime", "unit": "s" ,"device_class":SensorDeviceClass.DURATION,"state_class": SensorStateClass.MEASUREMENT, "optional": True,"icon": "mdi:timer-sand"},
+    "Rot": {"name": "Rotation", "unit": "°", "device_class": None, "state_class": SensorStateClass.MEASUREMENT, "optional": True, "icon": "mdi:axis-z-rotate-clockwise", 'valid_range': (0, 180)},
+    "Tilt": {"name": "Neigung", "unit": "°", "device_class": None, "state_class": SensorStateClass.MEASUREMENT, "optional": True, "icon": "mdi:rotate-right", 'valid_range': (0, 180)},
+    "Cam": {"name": "Kamera", "unit": None, "device_class": None, "state_class": None, "optional": True, "icon": "mdi:camera"},
+    "watertank": {"name": "Wassertank", "unit": None, "device_class": None, "state_class": None, "optional": True, "icon": "mdi:water-tank"},
+    "moving": {"name": "Bewegt sich", "unit": None, "device_class": None, "state_class": None, "optional": True, "icon": "mdi:arrow-all"},
+    "timeMQTT": {"name": "MQTT Zeit", "unit": "s", "device_class": SensorDeviceClass.DURATION, "state_class": SensorStateClass.MEASUREMENT, "optional": True, "icon": "mdi:clock"},
+    "compiled": {"name": "Firmware Datum", "unit": None, "device_class": None, "state_class": None, "optional": True, "icon": "mdi:information"},
     "last_reset_reason": {"name": "Letzter Reset Grund", "unit": None, "device_class": None, "optional": True,"icon": "mdi:restart"},
     "memory_usage": {"name": "Speicherauslastung", "unit": None,"device_class": None,"state_class": SensorStateClass.MEASUREMENT, "optional": True,"icon": "mdi:memory"}
 }
