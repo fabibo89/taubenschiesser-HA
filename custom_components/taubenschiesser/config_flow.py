@@ -11,5 +11,6 @@ class TaubenschiesserConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required("server"): str,
+                vol.Optional("mqtt_topic", default="taubenschiesser/+/info"): str,
             }),
         )

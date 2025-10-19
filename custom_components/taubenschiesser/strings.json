@@ -6,9 +6,10 @@
     "step": {
       "user": {
         "title": "Verbindung einrichten",
-        "description": "Gib die Serveradresse deines Taubenschießer-Systems ein.",
+        "description": "Konfiguriere die Verbindung zu deinem Taubenschießer-System.",
         "data": {
-          "server": "Server-URL"
+          "server": "Server-URL",
+          "mqtt_topic": "MQTT Topic (optional)"
         }
       }
     }

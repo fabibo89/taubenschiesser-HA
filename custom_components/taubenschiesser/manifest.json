@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "config_flow": true,
   "documentation": "https://github.com/fabibo89/taubenschiesser",
-  "dependencies": [],
+  "dependencies": ["mqtt"],
   "codeowners": [
     "@fabibo89"
   ],
