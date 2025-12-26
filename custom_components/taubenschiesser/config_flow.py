@@ -102,9 +102,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
+        # Get suggested API URL based on environment
+        suggested_api_url = "http://host.docker.internal:5001"
+        try:
+            # Try to detect if running in Docker
+            if self.hass.config.config_dir.startswith("/config"):
+                suggested_api_url = "http://host.docker.internal:5001"
+            else:
+                suggested_api_url = "http://localhost:5001"
+        except Exception:
+            suggested_api_url = "http://localhost:5001"
+
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_API_URL): str,
+                vol.Required(CONF_API_URL, default=suggested_api_url): str,
                 vol.Required(CONF_API_TOKEN): str,
                 vol.Optional(CONF_MQTT_BROKER): str,
                 vol.Optional(CONF_MQTT_PORT, default=DEFAULT_MQTT_PORT): int,
@@ -114,7 +125,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
         return self.async_show_form(
-            step_id="user", data_schema=data_schema, errors=errors
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "api_url_example": suggested_api_url,
+                "token_help": "Dashboard → F12 → Application → Local Storage → 'token'",
+            },
         )
 
 
