@@ -1,16 +1,12 @@
 {
   "domain": "taubenschiesser",
-  "name": "Taubenschießer",
-  "version": "0.0.2",
-  "config_flow": true,
-  "documentation": "https://github.com/fabibo89/taubenschiesser",
-  "dependencies": [
-    "mqtt"
-  ],
-  "codeowners": [
-    "@fabibo89"
-  ],
-  "requirements": [
-    "aiohttp"
-  ]
+  "name": "Taubenschiesser",
+  "version": "1.0.0",
+  "documentation": "https://github.com/your-repo/taubenschiesser",
+  "issue_tracker": "https://github.com/your-repo/taubenschiesser/issues",
+  "codeowners": ["@yourusername"],
+  "requirements": ["aiohttp>=3.8.0", "paho-mqtt>=1.6.0"],
+  "iot_class": "cloud_polling",
+  "config_flow": true
 }
+

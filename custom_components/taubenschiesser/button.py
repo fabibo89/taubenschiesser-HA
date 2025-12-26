@@ -1,189 +1,122 @@
-from homeassistant.components.button import ButtonEntity
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-import logging
+"""Button platform for Taubenschiesser."""
+from __future__ import annotations
 
-from .const import DOMAIN
+import logging
+from typing import Any
+
+from homeassistant.components.button import ButtonEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import ATTR_DEVICE_IP, DOMAIN
+from .coordinator import TaubenschiesserDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Konfigurierbare Button-Typen
-BUTTON_TYPES = {
-    "reset": {
-        "name": "Reset",
-        "url_path": "/reset",
-        "icon": "mdi:restart",
-        "use_post": False,
-        "json_data": {"type": "reset"}
-    },
-    "move_left": {
-        "name": "Links",
-        "url_path": "/ConDB",
-        "icon": "mdi:arrow-left",
-        "use_post": True, 
-        "json_data": {
-            "type": "impulse",
-            "speed": 1,
-            "bounce": False,
-            "position": {
-                "rot": -10,
-                "tilt": 0
-            }
-        }
-    },
-    "move_right": {
-        "name": "Rechts", 
-        "url_path": "/ConDB",
-        "icon": "mdi:arrow-right",
-        "use_post": True,
-        "json_data": {
-            "type": "impulse", 
-            "speed": 1,
-            "bounce": False,
-            "position": {
-                "rot": 10,
-                "tilt": 0
-            }
-        }
-    },
-    "move_up": {
-        "name": "Hoch",
-        "url_path": "/ConDB", 
-        "icon": "mdi:arrow-up",
-        "use_post": True,
-        "json_data": {
-            "type": "impulse",
-            "speed": 1, 
-            "bounce": False,
-            "position": {
-                "rot": 0,
-                "tilt": -10
-            }
-        }
-    },
-    "move_down": {
-        "name": "Runter",
-        "url_path": "/ConDB",
-        "icon": "mdi:arrow-down", 
-        "use_post": True,
-        "json_data": {
-            "type": "impulse",
-            "speed": 1,
-            "bounce": False, 
-            "position": {
-                "rot": 0,
-                "tilt": 10
-            }
-        }
-    },
-    "shoot": {
-        "name": "Schießen",
-        "url_path": "/ConDB",
-        "icon": "mdi:pistol",
-        "use_post": True,
-        "json_data": {
-            "type": "shoot",
-            "duration": 2000
-        }
-    }
-}
-
-async def async_setup_entry(hass, entry, async_add_entities):
-    coordinator = hass.data[DOMAIN][entry.entry_id]
-    _LOGGER.debug("button.py gestartet – verfügbare Stationsdaten: %s", coordinator.data)
-    buttons = []
-
-    for station_id, station in coordinator.data.items():
-        station_name = station.get("name", f"Station {station_id}")
-        station_ip = station.get("ip", f"Station {station_id}")
-
-        for button_key, button_conf in BUTTON_TYPES.items():
-            button_name = f"{button_conf['name']} {station_name}"
-            server_url = entry.data["server"] 
-            _LOGGER.debug("Erzeuge Button: %s (station_id=%s, type=%s)", button_name, station_id, button_key)
-
-            buttons.append(
-                    TaubenschiesserButton(
-                        coordinator,
-                        hass,
-                        station_name,
-                        station_id,
-                        station_ip,
-                        button_key,
-                        button_conf,
-                        server_url
-                    )
-                )
-
-    async_add_entities(buttons, True)
+BUTTON_TYPES = [
+    {"key": "rotate_left", "name": "Links", "icon": "mdi:arrow-left", "command": {"type": "impulse", "speed": 1, "bounce": 0, "position": {"rot": -10, "tilt": 0}}},
+    {"key": "rotate_right", "name": "Rechts", "icon": "mdi:arrow-right", "command": {"type": "impulse", "speed": 1, "bounce": 0, "position": {"rot": 10, "tilt": 0}}},
+    {"key": "move_up", "name": "Hoch", "icon": "mdi:arrow-up", "command": {"type": "impulse", "speed": 1, "bounce": 0, "position": {"rot": 0, "tilt": 10}}},
+    {"key": "move_down", "name": "Runter", "icon": "mdi:arrow-down", "command": {"type": "impulse", "speed": 1, "bounce": 0, "position": {"rot": 0, "tilt": -10}}},
+    {"key": "shoot", "name": "Schießen", "icon": "mdi:target", "command": {"type": "shoot", "duration": 500}},
+    {"key": "reset", "name": "Reset", "icon": "mdi:restore", "command": {"type": "reset"}},
+]
 
 
-class TaubenschiesserButton(ButtonEntity):
-    @property
-    def device_info(self):
-        return {
-            "identifiers": {(DOMAIN, f"station_{self.station_id}")},
-            "name": self.station_name,
-            "manufacturer": "Taubenschießer",
-            "model": "Taubenschießer",
-            "configuration_url": f"http://{self.station_ip}"
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Taubenschiesser buttons from a config entry."""
+    coordinator: TaubenschiesserDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-        }    
-    def __init__(self, coordinator, hass, station_name, station_id, station_ip, button_key, config, server_url):
-        self._coordinator = coordinator
-        self._session = async_get_clientsession(hass)
-        self.station_id = station_id
-        self.station_name = station_name
-        self.station_ip = station_ip
-        self.button_key = button_key
-        self._config = config
-        self._server_url = server_url
+    entities = []
+    for device_id, device in coordinator.data.get("devices", {}).items():
+        for button_type in BUTTON_TYPES:
+            entities.append(
+                TaubenschiesserButton(coordinator, device_id, device, button_type)
+            )
 
-        self._attr_name = f"{config['name']} {station_name}"
-        self._attr_entity_category = EntityCategory.CONFIG
-        self._attr_icon = config.get("icon", "mdi:gesture-tap-button")
-        self._attr_unique_id = f"{station_ip}_{button_key}_{station_id}"
+    async_add_entities(entities)
 
-    async def async_press(self):
-        import json
-        
-        url_path = self._config["url_path"]
-        url = f"http://{self.station_ip}{url_path}"
-        
-        _LOGGER.debug("Sende %s-Befehl an %s", self.button_key, url)
+
+class TaubenschiesserButton(CoordinatorEntity, ButtonEntity):
+    """Representation of a Taubenschiesser button."""
+
+    def __init__(
+        self,
+        coordinator: TaubenschiesserDataUpdateCoordinator,
+        device_id: str,
+        device: dict,
+        button_type: dict,
+    ) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self.device_id = device_id
+        self.device = device
+        self.button_type = button_type
+        self._attr_unique_id = f"{device_id}_{button_type['key']}"
+        self._attr_name = f"{device.get('name', 'Taubenschiesser')} {button_type['name']}"
+        self._attr_icon = button_type["icon"]
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        device = self.coordinator.data.get("devices", {}).get(self.device_id)
+        if not device:
+            _LOGGER.error("Device %s not found", self.device_id)
+            return
+
+        device_ip = device.get("taubenschiesser", {}).get("ip")
+        if not device_ip:
+            _LOGGER.error("Device IP not found for device %s", self.device_id)
+            return
 
         try:
-            if self._config.get("use_post", False):
-                # POST Request mit JSON-Daten
-                json_data = self._config.get("json_data", {})
-                headers = {"Content-Type": "application/json"}
-                
-                # Für ConDB: JSON als "text" Parameter senden
-                if url_path == "/ConDB":
-                    post_data = {"text": json.dumps(json_data)}
-                    _LOGGER.debug("Sende POST zu ConDB mit Daten: %s", post_data)
-                    async with self._session.post(url, data=post_data, timeout=5, ssl=False) as response:
-                        if response.status == 200:
-                            result = await response.text()
-                            _LOGGER.debug("Antwort von %s: %s", self._attr_name, result)
-                        else:
-                            _LOGGER.warning("Button-Request fehlgeschlagen (%s): HTTP %s", self._attr_name, response.status)
-                else:
-                    # Normaler JSON POST
-                    async with self._session.post(url, json=json_data, timeout=5, ssl=False) as response:
-                        if response.status == 200:
-                            result = await response.text()
-                            _LOGGER.debug("Antwort von %s: %s", self._attr_name, result)
-                        else:
-                            _LOGGER.warning("Button-Request fehlgeschlagen (%s): HTTP %s", self._attr_name, response.status)
+            # Try MQTT first if available
+            if self.coordinator.mqtt_client and self.coordinator.mqtt_client.is_connected():
+                await self.coordinator.send_mqtt_command(
+                    device_ip, self.button_type["command"]
+                )
             else:
-                # GET Request
-                async with self._session.get(url, timeout=5, ssl=False) as response:
-                    if response.status == 200:
-                        result = await response.text()
-                        _LOGGER.debug("Antwort von %s: %s", self._attr_name, result)
-                    else:
-                        _LOGGER.warning("Button-Request fehlgeschlagen (%s): HTTP %s", self._attr_name, response.status)
-                        
-        except Exception as e:
-            _LOGGER.error("Fehler beim Senden des Button-Requests an %s: %s", self._attr_name, e)
+                # Fallback to API
+                action = self.button_type["key"]
+                await self.coordinator.send_api_command(self.device_id, action)
+        except Exception as err:
+            _LOGGER.error(
+                "Error sending command %s to device %s: %s",
+                self.button_type["key"],
+                self.device_id,
+                err,
+            )
+            raise
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return device specific attributes."""
+        device = self.coordinator.data.get("devices", {}).get(self.device_id)
+        if not device:
+            return {}
+
+        return {
+            ATTR_DEVICE_IP: device.get("taubenschiesser", {}).get("ip"),
+        }
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        """Return device information."""
+        device = self.coordinator.data.get("devices", {}).get(self.device_id)
+        if not device:
+            return {}
+        
+        device_ip = device.get("taubenschiesser", {}).get("ip", "")
+        return {
+            "identifiers": {(DOMAIN, self.device_id)},
+            "name": device.get("name", "Taubenschiesser"),
+            "manufacturer": "Taubenschiesser",
+            "model": "Taubenschiesser Device",
+            "configuration_url": f"http://{device_ip}" if device_ip else None,
+        }
+

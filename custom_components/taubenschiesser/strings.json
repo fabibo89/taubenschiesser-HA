@@ -1,17 +1,27 @@
 {
-  "domain": "taubenschiesser",
-  "name": "Taubenschießer",
-  "config_flow": {
-    "title": "Taubenschießer Server",
+  "config": {
     "step": {
       "user": {
-        "title": "Verbindung einrichten",
-        "description": "Konfiguriere die Verbindung zu deinem Taubenschießer-System.",
+        "title": "Taubenschiesser konfigurieren",
+        "description": "Verbinde dich mit deinem Taubenschiesser-Server",
         "data": {
-          "server": "Server-URL",
-          "mqtt_topic": "MQTT Topic (optional)"
+          "api_url": "API URL",
+          "api_token": "API Token",
+          "mqtt_broker": "MQTT Broker (optional)",
+          "mqtt_port": "MQTT Port",
+          "mqtt_username": "MQTT Benutzername (optional)",
+          "mqtt_password": "MQTT Passwort (optional)"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zur API fehlgeschlagen",
+      "invalid_auth": "Ungültiger API Token",
+      "unknown": "Unbekannter Fehler"
+    },
+    "abort": {
+      "already_configured": "Integration ist bereits konfiguriert"
     }
   }
 }
+
