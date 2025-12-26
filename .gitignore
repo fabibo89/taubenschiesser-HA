@@ -8,3 +8,4 @@ custom_components/taubenschiesser/__pycache__/update.cpython-313.pyc
 .DS_Store
 .DS_Store?
 ._*
+/custom_components/taubenschiesser/__pycache__
