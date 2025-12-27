@@ -1,56 +1,104 @@
 # Release 0.0.3
 
-**Veröffentlichungsdatum**: 26. Dezember 2025
+**Veröffentlichungsdatum**: 27.12.2025
 
 ## 🎉 Neue Features
 
-### 🔑 Token-Verwaltung im Dashboard
-- **API Token direkt im Profil anzeigen**: Token kann jetzt einfach aus dem Dashboard-Profil kopiert werden
-- **Token-Sichtbarkeit umschalten**: Token kann ein- und ausgeblendet werden
-- **Ein-Klick-Kopieren**: Token wird mit einem Klick in die Zwischenablage kopiert
+### 🔐 OAuth2 mit automatischem Token-Refresh
+- **Email/Passwort-Authentifizierung**: Kein manueller API-Token mehr nötig - einfach Email und Passwort eingeben
+- **Automatische Token-Erneuerung**: Access Tokens werden automatisch erneuert, wenn sie ablaufen (30 Minuten)
+- **Refresh Tokens**: Langlebige Refresh Tokens (7 Tage) sorgen für nahtlose Authentifizierung
+- **Keine Token-Verwaltung mehr**: Die Integration kümmert sich vollautomatisch um die Token-Verwaltung
+- **Verbesserte Sicherheit**: Kurzlebige Access Tokens und automatische Erneuerung nach OAuth2-Best-Practices
 
-### 📱 Verbesserte Konfigurations-UI
-- **Detaillierte Feldbeschreibungen**: Alle Eingabefelder haben jetzt ausführliche Erklärungen und Beispiele
-- **Docker-spezifische Hinweise**: Automatische Erkennung und Hinweise für Docker-Umgebungen
-- **Vorgeschlagene API-URL**: Intelligente Vorschläge basierend auf der Umgebung (Docker vs. nativ)
+### 🆕 Switch-Platform
+- **Monitor-Steuerung**: Neuer Switch zum Starten/Pausieren des Taubenschiesser-Monitors
+- **Einfache Bedienung**: Monitor-Status kann direkt aus Home Assistant gesteuert werden
+- **Zustandssynchronisation**: Switch zeigt immer den aktuellen Monitor-Status an
 
-### 🏷️ Geräte-Gruppierung
-- **Automatische Geräte-Zuordnung**: Alle Entities werden jetzt korrekt ihren Geräten zugeordnet
-- **Geräte-Informationen**: Vollständige Geräte-Metadaten (Name, Hersteller, Modell, Konfigurations-URL)
-- **Bessere Übersicht**: Entities erscheinen gruppiert in der Home Assistant Geräteübersicht
+### 📊 Neue Sensoren
+
+#### "Letzte MQTT Nachricht"
+- **Zeitstempel der letzten MQTT-Nachricht**: Zeigt den genauen Zeitpunkt der letzten empfangenen MQTT-Nachricht vom Gerät
+- **Geräte-seitiger Zeitstempel**: Verwendet den Zeitstempel direkt vom ESP-Gerät (`timeMQTT`) für maximale Genauigkeit
+- **Echtzeit-Updates**: Wird automatisch aktualisiert, sobald neue MQTT-Nachrichten eintreffen
+
+#### "Status"
+- **Gesamtstatus des Geräts**: Zeigt den kombinierten Status von Taubenschiesser-Hardware und Kamera
+- **Automatische Berechnung**: Status wird dynamisch aus `taubenschiesserStatus` und `cameraStatus` berechnet
+- **Status-Werte**: `online`, `offline`, `maintenance`, `error`
+- **Immer aktuell**: Status wird bei jedem API-Abruf neu berechnet
+
+### 🌐 Deutsche Übersetzungen
+- **Vollständige Lokalisierung**: Alle UI-Elemente und Fehlermeldungen sind jetzt auf Deutsch verfügbar
+- **Verbesserte Benutzerführung**: Deutsche Beschreibungen für alle Konfigurationsfelder
 
 ## 🐛 Bugfixes
 
-### Token-Expiry-Handling
-- **Benutzerfreundliche Fehlermeldungen**: Bei abgelaufenen Tokens erscheint eine hilfreiche Meldung mit Anleitung
-- **Persistente Benachrichtigungen**: Token-Ablauf wird als persistente Benachrichtigung angezeigt
-- **Automatische Benachrichtigungs-Verwaltung**: Benachrichtigung verschwindet automatisch nach Token-Erneuerung
+### Status-Anzeige
+- **Dynamische Status-Berechnung**: Status wird jetzt immer aktuell berechnet, nicht mehr aus veralteten DB-Werten
+- **Korrekter Offline-Status**: Geräte werden jetzt korrekt als offline angezeigt, wenn sie nicht erreichbar sind
+- **Keine veralteten Status-Werte mehr**: Status wird bei jedem API-Abruf basierend auf den aktuellen Komponenten-Statusen berechnet
 
-### Docker-Kompatibilität
-- **Verbesserte Fehlerbehandlung**: Spezifische Fehlermeldungen für `localhost`-Probleme in Docker
-- **Hilfreiche Hinweise**: Automatische Erkennung von Docker-Umgebungen mit konkreten Lösungsvorschlägen
+### Config Flow
+- **Verbesserte Validierung**: Bessere Fehlerbehandlung bei Konfigurationsfehlern
+- **Umgebungsbasierte Vorschläge**: Automatische Erkennung von Docker-Umgebungen mit passenden API-URL-Vorschlägen
+- **Detaillierte Fehlermeldungen**: Spezifische Fehlermeldungen für häufige Konfigurationsprobleme
 
-## 📚 Dokumentation
-
-- **Aktualisierte README**: Vollständig überarbeitete README mit allen aktuellen Features
-- **Detaillierte Konfigurationsanleitung**: Schritt-für-Schritt-Anleitung für alle Szenarien
-- **Troubleshooting-Sektion**: Umfassende Fehlerbehebung mit häufigen Problemen und Lösungen
-- **Beispiele**: Lovelace UI und Automatisierungsbeispiele hinzugefügt
+### Token-Handling
+- **Korrekte Token-Aktualisierung**: Refresh Tokens werden korrekt gespeichert und verwendet
+- **Automatische Token-Erneuerung**: Tokens werden automatisch erneuert, bevor sie ablaufen
+- **Verbesserte Fehlerbehandlung**: Bessere Fehlermeldungen bei Token-Problemen
 
 ## 🔧 Technische Verbesserungen
 
-- **Service-basierte Notifications**: Umstellung auf Home Assistant Service-API für bessere Kompatibilität
-- **Internationalisierung**: Deutsche Übersetzungen für alle UI-Elemente
-- **Code-Qualität**: Verbesserte Fehlerbehandlung und Logging
+### Major Refactor
+- **Coordinator-Neuimplementierung**: Komplett neu geschriebener Coordinator mit Unterstützung für API und MQTT
+- **Vereinheitlichte Konstanten**: Alle Konstanten sind jetzt in einer Datei zentralisiert
+- **Verbesserte Button-Logik**: Restrukturierte Button-Implementierung für bessere Wartbarkeit
+- **Code-Bereinigung**: Entfernung veralteter Dateien (`coordinator_old.py`, `update.py`)
 
-## 📋 Migration von 0.0.2
+### Authentifizierung
+- **OAuth2-ähnliches System**: Implementierung eines robusten Token-Systems mit Access- und Refresh-Tokens
+- **Token-Typ-Validierung**: Sicherstellung, dass nur Access Tokens für API-Zugriffe verwendet werden
+- **Automatische Token-Erneuerung**: Nahtlose Token-Erneuerung ohne Benutzer-Interaktion
 
-Keine Breaking Changes! Die Integration kann einfach aktualisiert werden:
+### MQTT-Integration
+- **timeMQTT-Extraktion**: Zeitstempel aus MQTT-Payload werden jetzt extrahiert und verwendet
+- **Erweiterte Gerätedaten**: Mehr Informationen aus MQTT-Nachrichten werden verarbeitet
+- **Verbesserte Echtzeit-Updates**: Zuverlässigere MQTT-Verbindung und Datenverarbeitung
 
-1. Neue Version herunterladen
-2. Alte Version ersetzen
-3. Home Assistant neu starten
-4. Optional: Integration neu konfigurieren, um von den neuen Features zu profitieren
+### Code-Qualität
+- **Entfernung von Legacy-Code**: Alle alten Token-bezogenen Code-Pfade wurden entfernt
+- **Konsistente Status-Berechnung**: Status wird überall einheitlich berechnet
+- **Verbesserte Fehlerbehandlung**: Robustere Fehlerbehandlung bei API- und Token-Fehlern
+- **Bessere Code-Struktur**: Vereinfachte und besser wartbare Code-Organisation
+
+## 📚 Dokumentation
+
+- **Aktualisierte README**: Vollständig überarbeitete und konsolidierte README mit detaillierten Anleitungen
+- **Konfigurationsdokumentation**: Neue `KONFIGURATION.md` mit ausführlichen Konfigurationsdetails
+- **Klare Installationsanleitung**: Schritt-für-Schritt-Anleitung ohne Token-Verwaltung
+- **Troubleshooting**: Aktualisierte Fehlerbehebung für die neue Authentifizierungsmethode
+- **Beispiele**: Lovelace UI und Automatisierungsbeispiele hinzugefügt
+
+## 🔄 Breaking Changes
+
+### ⚠️ WICHTIG: Konfiguration muss neu eingerichtet werden
+
+Diese Version verwendet ein neues Authentifizierungssystem. **Bestehende Konfigurationen müssen neu eingerichtet werden:**
+
+1. Integration in Home Assistant entfernen
+2. Integration neu hinzufügen
+3. **Email und Passwort** eingeben (anstatt API-Token)
+4. Optionale MQTT-Einstellungen konfigurieren (falls gewünscht)
+
+**Migration von 0.0.2:**
+- Die alte Token-basierte Konfiguration wird nicht mehr unterstützt
+- Alle Konfigurationen müssen auf Email/Passwort umgestellt werden
+- Keine automatische Migration möglich
+
+**Hinweis**: Die Integration-Version im Manifest wurde von `0.0.2` auf `0.0.3` aktualisiert.
 
 ## 🙏 Danke
 
@@ -58,7 +106,4 @@ Vielen Dank an alle, die Feedback gegeben haben und zur Verbesserung dieser Inte
 
 ---
 
-**Vollständige Changelog**: [Commits seit 0.0.2](https://github.com/fabibo89/taubenschiesser-HA/compare/0.0.2...main)
-
-
-
+**Vollständige Changelog**: [Commits seit 0.0.2](https://github.com/fabibo89/taubenschiesser-HA/compare/0.0.2...0.0.3)
