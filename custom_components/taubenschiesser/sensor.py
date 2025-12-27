@@ -11,10 +11,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_DEVICE_IP,
+    ATTR_LAST_MQTT,
     ATTR_LAST_SEEN,
     ATTR_MONITOR_STATUS,
     ATTR_MOVING,
     ATTR_ROTATION,
+    ATTR_STATUS,
     ATTR_TILT,
     DOMAIN,
 )
@@ -32,6 +34,16 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="Tilt",
         native_unit_of_measurement="°",
         icon="mdi:angle-acute",
+    ),
+    SensorEntityDescription(
+        key=ATTR_LAST_MQTT,
+        name="Letzte MQTT Nachricht",
+        icon="mdi:clock-outline",
+    ),
+    SensorEntityDescription(
+        key=ATTR_STATUS,
+        name="Status",
+        icon="mdi:information",
     ),
 )
 
@@ -73,11 +85,23 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = f"{device.get('name', 'Taubenschiesser')} {description.name}"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | str | None:
         """Return the state of the sensor."""
         device = self.coordinator.data.get("devices", {}).get(self.device_id)
         if device:
-            return device.get(self.entity_description.key, 0)
+            key = self.entity_description.key
+            if key == ATTR_LAST_MQTT:
+                # Return timestamp as ISO string or None
+                value = device.get(key)
+                if value:
+                    return value
+                return None
+            elif key == ATTR_STATUS:
+                # Return status as string
+                return device.get(key, "unknown")
+            else:
+                # Numeric values (rotation, tilt)
+                return device.get(key, 0)
         return None
 
     @property
@@ -95,6 +119,9 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
 
         if device.get("lastSeen"):
             attrs[ATTR_LAST_SEEN] = device["lastSeen"]
+        
+        if device.get(ATTR_LAST_MQTT):
+            attrs[ATTR_LAST_MQTT] = device[ATTR_LAST_MQTT]
 
         return attrs
 

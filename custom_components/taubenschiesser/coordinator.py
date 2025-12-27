@@ -12,17 +12,23 @@ import paho.mqtt.client as mqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     API_ENDPOINT_DEVICES,
+    API_ENDPOINT_REFRESH,
     ATTR_DEVICE_IP,
+    ATTR_LAST_MQTT,
     ATTR_LAST_SEEN,
     ATTR_MONITOR_STATUS,
     ATTR_MOVING,
     ATTR_ROTATION,
+    ATTR_STATUS,
     ATTR_TILT,
-    CONF_API_TOKEN,
     CONF_API_URL,
+    CONF_ACCESS_TOKEN,
+    CONF_REFRESH_TOKEN,
+    CONF_EMAIL,
     CONF_MQTT_BROKER,
     CONF_MQTT_PASSWORD,
     CONF_MQTT_PORT,
@@ -49,7 +55,12 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         self.hass = hass
         self.entry = entry
         self.api_url = entry.data[CONF_API_URL].rstrip("/")
-        self.api_token = entry.data[CONF_API_TOKEN]
+        
+        # Token management
+        self.access_token = entry.data[CONF_ACCESS_TOKEN]
+        self.refresh_token = entry.data.get(CONF_REFRESH_TOKEN)
+        self.session = async_get_clientsession(hass)
+        
         self.mqtt_broker = entry.data.get(CONF_MQTT_BROKER)
         self.mqtt_port = entry.data.get(CONF_MQTT_PORT, 1883)
         self.mqtt_username = entry.data.get(CONF_MQTT_USERNAME)
@@ -60,6 +71,84 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         self.device_positions: dict[str, dict[str, Any]] = {}
         self._token_expired_notified = False
 
+    async def _ensure_token_valid(self) -> None:
+        """Ensure access token is valid, refresh if needed."""
+        if not self.access_token:
+            raise UpdateFailed("Kein Access Token verfügbar")
+        
+        # Try a test request to check if token is still valid
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        try:
+            async with self.session.get(
+                f"{self.api_url}/api/auth/me",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response:
+                if response.status == 200:
+                    return  # Token is valid
+                elif response.status == 401:
+                    # Token expired, try refresh
+                    _LOGGER.debug("Access Token abgelaufen, versuche Refresh")
+                    await self._refresh_token()
+        except Exception as e:
+            _LOGGER.debug("Fehler beim Token-Check: %s", e)
+            # Try refresh anyway if we have refresh token
+            if self.refresh_token:
+                await self._refresh_token()
+
+    async def _refresh_token(self) -> None:
+        """Refresh access token using refresh token."""
+        if not self.refresh_token:
+            raise UpdateFailed("Kein Refresh Token verfügbar")
+        
+        try:
+            async with self.session.post(
+                f"{self.api_url}{API_ENDPOINT_REFRESH}",
+                json={"refresh_token": self.refresh_token},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    token_data = await response.json()
+                    new_access_token = token_data.get("access_token")
+                    new_refresh_token = token_data.get("refresh_token")
+                    
+                    if not new_access_token:
+                        raise UpdateFailed("Kein Access Token in Refresh-Antwort erhalten")
+                    
+                    self.access_token = new_access_token
+                    if new_refresh_token:
+                        self.refresh_token = new_refresh_token
+                    
+                    # Update config entry with new tokens
+                    new_data = self.entry.data.copy()
+                    new_data[CONF_ACCESS_TOKEN] = self.access_token
+                    if new_refresh_token:
+                        new_data[CONF_REFRESH_TOKEN] = self.refresh_token
+                    
+                    self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+                    
+                    _LOGGER.debug("Token erfolgreich aktualisiert")
+                    
+                    # Dismiss notification if shown
+                    if self._token_expired_notified:
+                        self.hass.async_create_task(
+                            self.hass.services.async_call(
+                                "persistent_notification",
+                                "dismiss",
+                                {"notification_id": f"{DOMAIN}_token_expired"},
+                            )
+                        )
+                        self._token_expired_notified = False
+                else:
+                    error_text = await response.text()
+                    raise UpdateFailed(f"Token-Refresh fehlgeschlagen: HTTP {response.status} - {error_text}")
+        except aiohttp.ClientError as e:
+            _LOGGER.error("Fehler beim Token-Refresh: %s", e)
+            raise UpdateFailed(f"Token-Refresh fehlgeschlagen: {e}")
+        except Exception as e:
+            _LOGGER.error("Fehler beim Token-Refresh: %s", e)
+            raise UpdateFailed(f"Token-Refresh fehlgeschlagen: {e}")
+
     def _show_token_expired_notification(self) -> None:
         """Show persistent notification about expired token."""
         if not self._token_expired_notified:
@@ -69,17 +158,13 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     "persistent_notification",
                     "create",
                     {
-                        "title": "🔑 Taubenschiesser: API Token abgelaufen",
+                        "title": "🔑 Taubenschiesser: Token abgelaufen",
                         "message": (
-                            "Dein API Token ist abgelaufen (Gültigkeit: 7 Tage).\n\n"
-                            "**So bekommst du einen neuen Token:**\n"
-                            "1. Öffne das Taubenschiesser Dashboard\n"
-                            "2. Logge dich ein\n"
-                            "3. Entwicklertools (F12) → Application → Local Storage → 'token'\n"
-                            "4. Kopiere den Token\n"
-                            "5. Gehe zu: Einstellungen → Geräte & Dienste → Taubenschiesser → Konfigurieren\n"
-                            "6. Füge den neuen Token ein und speichere\n\n"
-                            "**Alternative:** Terminal: `curl -X POST http://localhost:5001/api/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"deine@email.de\",\"password\":\"dein-passwort\"}'`"
+                            "Dein Access Token ist abgelaufen.\n\n"
+                            "**Automatische Erneuerung:**\n"
+                            "Die Integration versucht automatisch, den Token zu erneuern. "
+                            "Falls dies fehlschlägt, bitte die Integration neu konfigurieren.\n\n"
+                            "Gehe zu: Einstellungen → Geräte & Dienste → Taubenschiesser → Konfigurieren"
                         ),
                         "notification_id": f"{DOMAIN}_token_expired",
                     },
@@ -87,68 +172,146 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
             )
             self._token_expired_notified = True
             _LOGGER.error(
-                "API Token ist abgelaufen. Bitte erneuere den Token in den Integrationseinstellungen."
+                "Access Token ist abgelaufen. Versuche automatische Erneuerung..."
             )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
         try:
-            headers = {"Authorization": f"Bearer {self.api_token}"}
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{self.api_url}{API_ENDPOINT_DEVICES}",
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 200:
-                        # Reset notification flag on successful request
-                        if self._token_expired_notified:
-                            self.hass.async_create_task(
-                                self.hass.services.async_call(
-                                    "persistent_notification",
-                                    "dismiss",
-                                    {"notification_id": f"{DOMAIN}_token_expired"},
-                                )
+            # Ensure token is valid (will refresh if needed)
+            if self.refresh_token:
+                await self._ensure_token_valid()
+            
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            async with self.session.get(
+                f"{self.api_url}{API_ENDPOINT_DEVICES}",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    # Reset notification flag on successful request
+                    if self._token_expired_notified:
+                        self.hass.async_create_task(
+                            self.hass.services.async_call(
+                                "persistent_notification",
+                                "dismiss",
+                                {"notification_id": f"{DOMAIN}_token_expired"},
                             )
-                            self._token_expired_notified = False
+                        )
+                        self._token_expired_notified = False
+                    
+                    devices = await response.json()
+                    self.devices = {device["_id"]: device for device in devices}
+                    
+                    # Merge with MQTT position data
+                    for device_id, device in self.devices.items():
+                        device_ip = device.get("taubenschiesser", {}).get("ip")
+                        if device_ip and device_ip in self.device_positions:
+                            pos_data = self.device_positions[device_ip]
+                            device[ATTR_ROTATION] = pos_data.get("rot", 0)
+                            device[ATTR_TILT] = pos_data.get("tilt", 0)
+                            device[ATTR_MOVING] = pos_data.get("moving", False)
+                            # Extract timeMQTT if available
+                            if "timeMQTT" in pos_data:
+                                device[ATTR_LAST_MQTT] = pos_data.get("timeMQTT")
+                        else:
+                            device[ATTR_ROTATION] = 0
+                            device[ATTR_TILT] = 0
+                            device[ATTR_MOVING] = False
                         
-                        devices = await response.json()
-                        self.devices = {device["_id"]: device for device in devices}
-                        
-                        # Merge with MQTT position data
-                        for device_id, device in self.devices.items():
-                            device_ip = device.get("taubenschiesser", {}).get("ip")
-                            if device_ip and device_ip in self.device_positions:
-                                pos_data = self.device_positions[device_ip]
-                                device[ATTR_ROTATION] = pos_data.get("rot", 0)
-                                device[ATTR_TILT] = pos_data.get("tilt", 0)
-                                device[ATTR_MOVING] = pos_data.get("moving", False)
+                        # Set status - use overall status from device, or calculate from taubenschiesserStatus/cameraStatus
+                        device[ATTR_STATUS] = device.get("status", "unknown")
+                        if device[ATTR_STATUS] == "unknown" or not device.get("status"):
+                            # Calculate status from component statuses
+                            taubenschiesser_status = device.get("taubenschiesserStatus", "offline")
+                            camera_status = device.get("cameraStatus", "offline")
+                            if taubenschiesser_status == "online" and camera_status == "online":
+                                device[ATTR_STATUS] = "online"
+                            elif taubenschiesser_status == "error" or camera_status == "error":
+                                device[ATTR_STATUS] = "error"
+                            elif taubenschiesser_status == "maintenance" or camera_status == "maintenance":
+                                device[ATTR_STATUS] = "maintenance"
                             else:
-                                device[ATTR_ROTATION] = 0
-                                device[ATTR_TILT] = 0
-                                device[ATTR_MOVING] = False
-                        
-                        # Subscribe to new devices if MQTT is connected
-                        if self.mqtt_client and self.mqtt_client.is_connected():
-                            await self.hass.async_add_executor_job(
-                                self._subscribe_to_devices, self.mqtt_client
+                                device[ATTR_STATUS] = "offline"
+                    
+                    # Subscribe to new devices if MQTT is connected
+                    if self.mqtt_client and self.mqtt_client.is_connected():
+                        await self.hass.async_add_executor_job(
+                            self._subscribe_to_devices, self.mqtt_client
+                        )
+                    
+                    return {"devices": self.devices}
+                elif response.status == 401:
+                    # Token expired or invalid
+                    error_text = await response.text()
+                    
+                    # Try to refresh if we have refresh token
+                    if self.refresh_token:
+                        try:
+                            self._show_token_expired_notification()
+                            await self._refresh_token()
+                            # Retry request with new token
+                            headers = {"Authorization": f"Bearer {self.access_token}"}
+                            async with self.session.get(
+                                f"{self.api_url}{API_ENDPOINT_DEVICES}",
+                                headers=headers,
+                                timeout=aiohttp.ClientTimeout(total=10),
+                            ) as retry_response:
+                                if retry_response.status == 200:
+                                    devices = await retry_response.json()
+                                    self.devices = {device["_id"]: device for device in devices}
+                                    
+                                    # Merge with MQTT position data
+                                    for device_id, device in self.devices.items():
+                                        device_ip = device.get("taubenschiesser", {}).get("ip")
+                                        if device_ip and device_ip in self.device_positions:
+                                            pos_data = self.device_positions[device_ip]
+                                            device[ATTR_ROTATION] = pos_data.get("rot", 0)
+                                            device[ATTR_TILT] = pos_data.get("tilt", 0)
+                                            device[ATTR_MOVING] = pos_data.get("moving", False)
+                                            # Extract timeMQTT if available
+                                            if "timeMQTT" in pos_data:
+                                                device[ATTR_LAST_MQTT] = pos_data.get("timeMQTT")
+                                        else:
+                                            device[ATTR_ROTATION] = 0
+                                            device[ATTR_TILT] = 0
+                                            device[ATTR_MOVING] = False
+                                        
+                                        # Set status
+                                        device[ATTR_STATUS] = device.get("status", "unknown")
+                                        if device[ATTR_STATUS] == "unknown" or not device.get("status"):
+                                            taubenschiesser_status = device.get("taubenschiesserStatus", "offline")
+                                            camera_status = device.get("cameraStatus", "offline")
+                                            if taubenschiesser_status == "online" and camera_status == "online":
+                                                device[ATTR_STATUS] = "online"
+                                            elif taubenschiesser_status == "error" or camera_status == "error":
+                                                device[ATTR_STATUS] = "error"
+                                            elif taubenschiesser_status == "maintenance" or camera_status == "maintenance":
+                                                device[ATTR_STATUS] = "maintenance"
+                                            else:
+                                                device[ATTR_STATUS] = "offline"
+                                    
+                                    return {"devices": self.devices}
+                                else:
+                                    raise UpdateFailed(
+                                        f"API-Fehler nach Token-Refresh (Status {retry_response.status})"
+                                    )
+                        except Exception as refresh_err:
+                            _LOGGER.error("Fehler beim Token-Refresh: %s", refresh_err)
+                            raise UpdateFailed(
+                                "API Token ist abgelaufen und konnte nicht erneuert werden. "
+                                "Bitte konfiguriere die Integration neu."
                             )
-                        
-                        return {"devices": self.devices}
-                    elif response.status == 401:
-                        # Token expired or invalid
-                        error_text = await response.text()
+                    else:
                         self._show_token_expired_notification()
                         raise UpdateFailed(
-                            "API Token ist abgelaufen oder ungültig. "
-                            "Bitte erneuere den Token in den Integrationseinstellungen. "
-                            f"API-Antwort: {error_text}"
+                            "API Token ist abgelaufen. Bitte konfiguriere die Integration neu."
                         )
-                    else:
-                        error_text = await response.text()
-                        raise UpdateFailed(
-                            f"API-Fehler (Status {response.status}): {error_text}"
-                        )
+                else:
+                    error_text = await response.text()
+                    raise UpdateFailed(
+                        f"API-Fehler (Status {response.status}): {error_text}"
+                    )
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Netzwerkfehler bei API-Verbindung: {err}") from err
 
@@ -188,14 +351,19 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                 if len(topic_parts) >= 2:
                     device_ip = topic_parts[1]
                     
-                    # Update position data
-                    self.device_positions[device_ip] = {
+                    # Update position data - extract timeMQTT if available
+                    position_data = {
                         "rot": payload.get("Rot", 0),
                         "tilt": payload.get("Tilt", 0),
                         "moving": payload.get("moving", False),
                         "watertank": payload.get("watertank", True),
                         "cam": payload.get("Cam", False),
                     }
+                    # Extract timeMQTT if present
+                    if "timeMQTT" in payload:
+                        position_data["timeMQTT"] = payload.get("timeMQTT")
+                    
+                    self.device_positions[device_ip] = position_data
                     
                     # Update device data if we have it
                     for device_id, device in self.devices.items():
@@ -203,6 +371,9 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                             device[ATTR_ROTATION] = payload.get("Rot", 0)
                             device[ATTR_TILT] = payload.get("Tilt", 0)
                             device[ATTR_MOVING] = payload.get("moving", False)
+                            # Update timeMQTT if available
+                            if "timeMQTT" in payload:
+                                device[ATTR_LAST_MQTT] = payload.get("timeMQTT")
                             break
                     
                     # Trigger coordinator update
@@ -261,48 +432,82 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def send_api_command(self, device_id: str, action: str) -> None:
         """Send command via API."""
-        headers = {"Authorization": f"Bearer {self.api_token}"}
+        # Ensure token is valid
+        if self.refresh_token:
+            await self._ensure_token_valid()
+        
+        headers = {"Authorization": f"Bearer {self.access_token}"}
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.api_url}/api/device-control/{device_id}/control",
-                    headers=headers,
-                    json={"action": action},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 401:
-                        self._show_token_expired_notification()
+            async with self.session.post(
+                f"{self.api_url}/api/device-control/{device_id}/control",
+                headers=headers,
+                json={"action": action},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 401:
+                    # Try refresh if we have refresh token
+                    if self.refresh_token:
+                        await self._refresh_token()
+                        headers = {"Authorization": f"Bearer {self.access_token}"}
+                        async with self.session.post(
+                            f"{self.api_url}/api/device-control/{device_id}/control",
+                            headers=headers,
+                            json={"action": action},
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as retry_response:
+                            if retry_response.status != 200:
+                                error_text = await retry_response.text()
+                                raise Exception(
+                                    f"API-Befehl fehlgeschlagen (Status {retry_response.status}): {error_text}"
+                                )
+                    else:
                         raise Exception(
-                            "API Token ist abgelaufen. Bitte erneuere den Token in den Integrationseinstellungen."
+                            "API Token ist abgelaufen. Bitte konfiguriere die Integration neu."
                         )
-                    elif response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(
-                            f"API-Befehl fehlgeschlagen (Status {response.status}): {error_text}"
-                        )
+                elif response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(
+                        f"API-Befehl fehlgeschlagen (Status {response.status}): {error_text}"
+                    )
         except aiohttp.ClientError as err:
             raise Exception(f"Netzwerkfehler beim Senden des Befehls: {err}") from err
 
     async def send_api_start_pause(self, device_id: str, action: str) -> None:
         """Send start/pause command via API."""
-        headers = {"Authorization": f"Bearer {self.api_token}"}
+        # Ensure token is valid
+        if self.refresh_token:
+            await self._ensure_token_valid()
+        
+        headers = {"Authorization": f"Bearer {self.access_token}"}
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.api_url}/api/device-control/{device_id}/{action}",
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 401:
-                        self._show_token_expired_notification()
+            async with self.session.post(
+                f"{self.api_url}/api/device-control/{device_id}/{action}",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 401:
+                    # Try refresh if we have refresh token
+                    if self.refresh_token:
+                        await self._refresh_token()
+                        headers = {"Authorization": f"Bearer {self.access_token}"}
+                        async with self.session.post(
+                            f"{self.api_url}/api/device-control/{device_id}/{action}",
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as retry_response:
+                            if retry_response.status != 200:
+                                error_text = await retry_response.text()
+                                raise Exception(
+                                    f"API-Befehl fehlgeschlagen (Status {retry_response.status}): {error_text}"
+                                )
+                    else:
                         raise Exception(
-                            "API Token ist abgelaufen. Bitte erneuere den Token in den Integrationseinstellungen."
+                            "API Token ist abgelaufen. Bitte konfiguriere die Integration neu."
                         )
-                    elif response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(
-                            f"API-Befehl fehlgeschlagen (Status {response.status}): {error_text}"
-                        )
+                elif response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(
+                        f"API-Befehl fehlgeschlagen (Status {response.status}): {error_text}"
+                    )
         except aiohttp.ClientError as err:
             raise Exception(f"Netzwerkfehler beim Senden des Befehls: {err}") from err
-

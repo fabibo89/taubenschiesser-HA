@@ -6,7 +6,10 @@ PLATFORMS: Final = ["sensor", "switch", "button"]
 
 # Configuration keys
 CONF_API_URL: Final = "api_url"
-CONF_API_TOKEN: Final = "api_token"
+CONF_EMAIL: Final = "email"
+CONF_PASSWORD: Final = "password"
+CONF_ACCESS_TOKEN: Final = "access_token"
+CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_MQTT_BROKER: Final = "mqtt_broker"
 CONF_MQTT_PORT: Final = "mqtt_port"
 CONF_MQTT_USERNAME: Final = "mqtt_username"
@@ -20,6 +23,7 @@ DEFAULT_UPDATE_INTERVAL: Final = 30
 API_ENDPOINT_DEVICES: Final = "/api/devices"
 API_ENDPOINT_CONTROL: Final = "/api/device-control"
 API_ENDPOINT_AUTH: Final = "/api/auth/login"
+API_ENDPOINT_REFRESH: Final = "/api/auth/refresh"
 
 # MQTT topics
 MQTT_TOPIC_COMMAND: Final = "taubenschiesser/{ip}"
@@ -32,6 +36,8 @@ ATTR_MONITOR_STATUS: Final = "monitor_status"
 ATTR_DEVICE_IP: Final = "device_ip"
 ATTR_LAST_SEEN: Final = "last_seen"
 ATTR_MOVING: Final = "moving"
+ATTR_LAST_MQTT: Final = "last_mqtt"
+ATTR_STATUS: Final = "status"
 
 # Monitor status values
 MONITOR_STATUS_RUNNING: Final = "running"

@@ -8,14 +8,16 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     CONF_API_URL,
-    CONF_API_TOKEN,
+    CONF_EMAIL,
+    CONF_PASSWORD,
+    CONF_ACCESS_TOKEN,
+    CONF_REFRESH_TOKEN,
     CONF_MQTT_BROKER,
     CONF_MQTT_PASSWORD,
     CONF_MQTT_PORT,
@@ -23,27 +25,39 @@ from .const import (
     DEFAULT_MQTT_PORT,
     DOMAIN,
     API_ENDPOINT_DEVICES,
+    API_ENDPOINT_AUTH,
+    API_ENDPOINT_REFRESH,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_api_connection(api_url: str, api_token: str) -> bool:
-    """Validate API connection and token."""
+async def validate_login(api_url: str, email: str, password: str) -> dict[str, str]:
+    """Validate login and get tokens."""
     try:
-        headers = {"Authorization": f"Bearer {api_token}"}
         async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{api_url.rstrip('/')}{API_ENDPOINT_DEVICES}",
-                headers=headers,
+            async with session.post(
+                f"{api_url.rstrip('/')}{API_ENDPOINT_AUTH}",
+                json={"email": email, "password": password},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
-                    return True
+                    data = await response.json()
+                    access_token = data.get("access_token")
+                    refresh_token = data.get("refresh_token")
+                    
+                    if not access_token:
+                        raise InvalidAuth("Kein Token in der Antwort erhalten")
+                    
+                    return {
+                        "access_token": access_token,
+                        "refresh_token": refresh_token or "",
+                    }
                 elif response.status == 401:
-                    raise InvalidAuth
+                    raise InvalidAuth("Ungültige Anmeldedaten")
                 else:
-                    raise CannotConnect
+                    error_text = await response.text()
+                    raise CannotConnect(f"Login fehlgeschlagen: HTTP {response.status} - {error_text}")
     except aiohttp.ClientConnectorError as err:
         _LOGGER.error("API connection error: %s", err)
         # Check if localhost is used (common Docker issue)
@@ -64,10 +78,31 @@ async def validate_api_connection(api_url: str, api_token: str) -> bool:
         raise CannotConnect(f"Unerwarteter Fehler: {err}")
 
 
+async def validate_api_connection(api_url: str, access_token: str) -> bool:
+    """Validate API connection with access token."""
+    try:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{api_url.rstrip('/')}{API_ENDPOINT_DEVICES}",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 200:
+                    return True
+                elif response.status == 401:
+                    raise InvalidAuth
+                else:
+                    raise CannotConnect
+    except (aiohttp.ClientConnectorError, aiohttp.ClientError, Exception) as err:
+        _LOGGER.error("API connection error: %s", err)
+        raise CannotConnect(f"Verbindung fehlgeschlagen: {err}")
+
+
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Taubenschiesser."""
 
-    VERSION = 1
+    VERSION = 2  # Increment version for breaking changes
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -77,11 +112,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
+                # Try login with email/password
+                tokens = await validate_login(
+                    user_input[CONF_API_URL],
+                    user_input[CONF_EMAIL],
+                    user_input[CONF_PASSWORD],
+                )
+                
+                # Validate connection with access token
                 await validate_api_connection(
-                    user_input[CONF_API_URL], user_input[CONF_API_TOKEN]
+                    user_input[CONF_API_URL],
+                    tokens["access_token"],
                 )
             except CannotConnect as err:
-                # Use the error message if available, otherwise use the default
                 error_msg = str(err) if str(err) else "cannot_connect"
                 if error_msg != "cannot_connect":
                     errors["base"] = error_msg
@@ -97,9 +140,26 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_API_URL])
                 self._abort_if_unique_id_configured()
 
+                # Store tokens in config entry
+                config_data = {
+                    CONF_API_URL: user_input[CONF_API_URL],
+                    CONF_EMAIL: user_input[CONF_EMAIL],
+                    CONF_ACCESS_TOKEN: tokens["access_token"],
+                    CONF_REFRESH_TOKEN: tokens["refresh_token"],
+                }
+                
+                # Add MQTT config if provided
+                if user_input.get(CONF_MQTT_BROKER):
+                    config_data[CONF_MQTT_BROKER] = user_input[CONF_MQTT_BROKER]
+                    config_data[CONF_MQTT_PORT] = user_input.get(CONF_MQTT_PORT, DEFAULT_MQTT_PORT)
+                    if user_input.get(CONF_MQTT_USERNAME):
+                        config_data[CONF_MQTT_USERNAME] = user_input[CONF_MQTT_USERNAME]
+                    if user_input.get(CONF_MQTT_PASSWORD):
+                        config_data[CONF_MQTT_PASSWORD] = user_input[CONF_MQTT_PASSWORD]
+
                 return self.async_create_entry(
                     title=f"Taubenschiesser ({user_input[CONF_API_URL]})",
-                    data=user_input,
+                    data=config_data,
                 )
 
         # Get suggested API URL based on environment
@@ -116,7 +176,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_API_URL, default=suggested_api_url): str,
-                vol.Required(CONF_API_TOKEN): str,
+                vol.Required(CONF_EMAIL): str,
+                vol.Required(CONF_PASSWORD): str,
                 vol.Optional(CONF_MQTT_BROKER): str,
                 vol.Optional(CONF_MQTT_PORT, default=DEFAULT_MQTT_PORT): int,
                 vol.Optional(CONF_MQTT_USERNAME): str,
@@ -130,7 +191,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "api_url_example": suggested_api_url,
-                "token_help": "Dashboard → F12 → Application → Local Storage → 'token'",
             },
         )
 
@@ -141,4 +201,3 @@ class CannotConnect(HomeAssistantError):
 
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
-

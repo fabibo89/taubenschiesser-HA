@@ -6,7 +6,8 @@
         "description": "Verbinde dich mit deinem Taubenschiesser-Server.\n\n**Erforderlich:** API URL und API Token\n**Optional:** MQTT für Echtzeit-Updates (kann leer bleiben)\n\nDetaillierte Hilfe findest du unter jedem Feld.",
         "data": {
           "api_url": "API URL",
-          "api_token": "API Token",
+          "email": "E-Mail",
+          "password": "Passwort",
           "mqtt_broker": "MQTT Broker (optional)",
           "mqtt_port": "MQTT Port",
           "mqtt_username": "MQTT Benutzername (optional)",
@@ -14,7 +15,8 @@
         },
         "data_description": {
           "api_url": "Die URL deines Taubenschiesser-Servers.\n\n**Beispiele:**\n• HA in Docker (macOS/Windows): http://host.docker.internal:5001\n• HA in Docker (Linux): http://[Host-IP]:5001\n• HA nativ: http://localhost:5001\n• Im Netzwerk: http://192.168.1.100:5001",
-          "api_token": "Dein JWT-Token für die API-Authentifizierung.\n\n**So bekommst du den Token:**\n1. Öffne das Taubenschiesser Dashboard\n2. Logge dich ein\n3. Entwicklertools (F12) → Application → Local Storage → 'token'\n4. Kopiere den Token-Wert\n\n⚠️ Token ist 7 Tage gültig",
+          "email": "Deine E-Mail-Adresse für die Anmeldung am Taubenschiesser-Server.",
+          "password": "Dein Passwort für die Anmeldung am Taubenschiesser-Server.\n\nDer Token wird automatisch verwaltet und erneuert.",
           "mqtt_broker": "IP-Adresse oder Hostname des MQTT-Brokers.\n\n**Optional** - Leer lassen wenn nicht benötigt.\n\n**Beispiele:**\n• Lokal: localhost oder host.docker.internal\n• Netzwerk: 192.168.1.100\n• Cloud: broker.hivemq.com",
           "mqtt_port": "Port des MQTT-Brokers.\n\n**Standard:** 1883 (unverschlüsselt)\n**SSL/TLS:** 8883 (für Cloud-Services)",
           "mqtt_username": "Benutzername für MQTT.\n\n**Optional** - Nur wenn dein MQTT-Broker Authentifizierung benötigt.",

@@ -60,3 +60,5 @@ Vielen Dank an alle, die Feedback gegeben haben und zur Verbesserung dieser Inte
 
 **Vollständige Changelog**: [Commits seit 0.0.2](https://github.com/fabibo89/taubenschiesser-HA/compare/0.0.2...main)
 
+
+

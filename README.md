@@ -48,26 +48,10 @@ Die Integration wird über die UI konfiguriert. Du benötigst:
   
   **Wichtig**: Port ist standardmäßig **5001**, kein Slash am Ende! Wenn Home Assistant in Docker läuft, funktioniert `localhost` **nicht**!
 
-- **API Token**: Dein JWT-Token für die API-Authentifizierung
-  
-  **Methode 1: Aus dem Dashboard (Einfachste Methode)**
-  1. Öffne dein Taubenschiesser-Dashboard im Browser
-  2. Logge dich ein
-  3. Gehe zu **Profil** (oben rechts)
-  4. Scrolle zur Sektion **"🔑 API Token (für Home Assistant)"**
-  5. Klicke auf das **Auge-Icon** um den Token anzuzeigen
-  6. Klicke auf das **Kopieren-Icon** um den Token zu kopieren
-  
-  **Alternative: Entwicklertools**
-  1. Entwicklertools (F12) → Application → Local Storage → 'token'
-  2. Kopiere den Wert (langer String, beginnt meist mit `eyJ...`)
-  
-  **Alternative: Über die API (Terminal)**
-  ```bash
-  curl -X POST http://localhost:5001/api/auth/login \
-    -H "Content-Type: application/json" \
-    -d '{"email":"deine@email.de","password":"dein-passwort"}'
-  ```
+- **Email**: Deine E-Mail-Adresse für die Anmeldung am Taubenschiesser-Server
+- **Passwort**: Dein Passwort für die Anmeldung
+
+Die Integration verwendet OAuth2 mit automatischem Token-Refresh. Nach der Eingabe von Email und Passwort werden die Tokens automatisch gespeichert und bei Bedarf erneuert. Du musst dich nicht mehr um Token-Verwaltung kümmern!
 
 ### Optionale Einstellungen (MQTT für Echtzeit-Updates)
 
@@ -101,11 +85,12 @@ Wenn Home Assistant in Docker läuft, funktioniert `localhost` **nicht**! Verwen
 - **macOS/Windows**: `host.docker.internal:5001`
 - **Linux**: Die IP-Adresse deines Hosts
 
-### API Token
+### Authentifizierung
 
-- Der Token ist **7 Tage gültig**
-- Bei Ablauf erscheint eine benutzerfreundliche Meldung in Home Assistant
-- Neuen Token einfach aus dem Dashboard kopieren und in den Integrationseinstellungen eintragen
+- Die Integration verwendet **OAuth2 mit automatischem Token-Refresh**
+- Email und Passwort werden für die Authentifizierung verwendet
+- Access Tokens werden automatisch erneuert, wenn sie ablaufen
+- Keine manuelle Token-Verwaltung mehr nötig!
 
 ## Verwendung
 
@@ -217,7 +202,7 @@ Beiträge sind willkommen — Bugreports, Verbesserungsvorschläge und Pull Requ
 ### API-Verbindungsfehler
 
 - Prüfe, ob die API-URL korrekt ist (besonders bei Docker: `host.docker.internal` statt `localhost`)
-- Stelle sicher, dass der API-Token gültig ist
+- Stelle sicher, dass Email und Passwort korrekt sind
 - Prüfe die Home Assistant Logs für detaillierte Fehlermeldungen
 
 ### MQTT-Verbindungsfehler
@@ -229,7 +214,7 @@ Beiträge sind willkommen — Bugreports, Verbesserungsvorschläge und Pull Requ
 ### Keine Geräte gefunden
 
 - Stelle sicher, dass Geräte in der Taubenschiesser-API konfiguriert sind
-- Prüfe, ob der API-Token Zugriff auf die Geräte hat
+- Prüfe, ob der Benutzer-Zugriff auf die Geräte hat
 - Prüfe die Home Assistant Logs
 
 ## Support
