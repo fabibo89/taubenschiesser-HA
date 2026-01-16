@@ -18,6 +18,8 @@ from .const import (
     ATTR_ROTATION,
     ATTR_STATUS,
     ATTR_TILT,
+    ATTR_TODAY_DETECTIONS,
+    ATTR_YESTERDAY_DETECTIONS,
     DOMAIN,
 )
 from .coordinator import TaubenschiesserDataUpdateCoordinator
@@ -44,6 +46,18 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         key=ATTR_STATUS,
         name="Status",
         icon="mdi:information",
+    ),
+    SensorEntityDescription(
+        key=ATTR_TODAY_DETECTIONS,
+        name="Erkennungen heute",
+        native_unit_of_measurement="Erkennungen",
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key=ATTR_YESTERDAY_DETECTIONS,
+        name="Erkennungen gestern",
+        native_unit_of_measurement="Erkennungen",
+        icon="mdi:counter",
     ),
 )
 
@@ -99,6 +113,14 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
             elif key == ATTR_STATUS:
                 # Return status as string
                 return device.get(key, "unknown")
+            elif key == ATTR_TODAY_DETECTIONS:
+                # Return today's detection count
+                counts = device.get("detectionCounts", {})
+                return counts.get("today", 0)
+            elif key == ATTR_YESTERDAY_DETECTIONS:
+                # Return yesterday's detection count
+                counts = device.get("detectionCounts", {})
+                return counts.get("yesterday", 0)
             else:
                 # Numeric values (rotation, tilt)
                 return device.get(key, 0)

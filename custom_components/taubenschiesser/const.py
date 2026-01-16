@@ -38,6 +38,8 @@ ATTR_LAST_SEEN: Final = "last_seen"
 ATTR_MOVING: Final = "moving"
 ATTR_LAST_MQTT: Final = "last_mqtt"
 ATTR_STATUS: Final = "status"
+ATTR_TODAY_DETECTIONS: Final = "today_detections"
+ATTR_YESTERDAY_DETECTIONS: Final = "yesterday_detections"
 
 # Monitor status values
 MONITOR_STATUS_RUNNING: Final = "running"
