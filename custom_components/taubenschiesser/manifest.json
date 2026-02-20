@@ -5,7 +5,7 @@
   "documentation": "https://github.com/your-repo/taubenschiesser",
   "issue_tracker": "https://github.com/your-repo/taubenschiesser/issues",
   "codeowners": [
-    "@yourusername"
+    "@fabibo89"
   ],
   "requirements": [
     "aiohttp>=3.8.0",
