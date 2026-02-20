@@ -144,6 +144,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 config_data = {
                     CONF_API_URL: user_input[CONF_API_URL],
                     CONF_EMAIL: user_input[CONF_EMAIL],
+                    CONF_PASSWORD: user_input[CONF_PASSWORD],  # Store password for automatic re-authentication
                     CONF_ACCESS_TOKEN: tokens["access_token"],
                     CONF_REFRESH_TOKEN: tokens["refresh_token"],
                 }

@@ -29,6 +29,7 @@ from .const import (
     CONF_ACCESS_TOKEN,
     CONF_REFRESH_TOKEN,
     CONF_EMAIL,
+    CONF_PASSWORD,
     CONF_MQTT_BROKER,
     CONF_MQTT_PASSWORD,
     CONF_MQTT_PORT,
@@ -59,6 +60,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         # Token management
         self.access_token = entry.data[CONF_ACCESS_TOKEN]
         self.refresh_token = entry.data.get(CONF_REFRESH_TOKEN)
+        self.email = entry.data.get(CONF_EMAIL)  # For re-authentication
+        self.password = entry.data.get(CONF_PASSWORD)  # For re-authentication
         self.session = async_get_clientsession(hass)
         
         self.mqtt_broker = entry.data.get(CONF_MQTT_BROKER)
@@ -141,6 +144,19 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                         self._token_expired_notified = False
                 else:
                     error_text = await response.text()
+                    
+                    # Check if refresh token expired - try re-authentication
+                    if response.status == 401 and "Refresh token expired" in error_text:
+                        _LOGGER.warning("Refresh Token abgelaufen, versuche automatische Re-Authentifizierung...")
+                        try:
+                            await self._reauthenticate()
+                            return  # Successfully re-authenticated
+                        except Exception as reauth_err:
+                            _LOGGER.error("Re-Authentifizierung fehlgeschlagen: %s", reauth_err)
+                            raise UpdateFailed(
+                                f"Refresh Token abgelaufen und Re-Authentifizierung fehlgeschlagen: {reauth_err}"
+                            )
+                    
                     raise UpdateFailed(f"Token-Refresh fehlgeschlagen: HTTP {response.status} - {error_text}")
         except aiohttp.ClientError as e:
             _LOGGER.error("Fehler beim Token-Refresh: %s", e)
@@ -174,6 +190,49 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error(
                 "Access Token ist abgelaufen. Versuche automatische Erneuerung..."
             )
+
+    async def _reauthenticate(self) -> None:
+        """Re-authenticate using email and password when refresh token expired."""
+        if not self.email or not self.password:
+            raise UpdateFailed(
+                "Refresh Token abgelaufen und keine Anmeldedaten gespeichert. "
+                "Bitte Integration neu konfigurieren."
+            )
+        
+        try:
+            # Import validate_login from config_flow
+            from .config_flow import validate_login
+            
+            _LOGGER.info("Starte Re-Authentifizierung mit E-Mail: %s", self.email)
+            tokens = await validate_login(self.api_url, self.email, self.password)
+            
+            self.access_token = tokens["access_token"]
+            self.refresh_token = tokens.get("refresh_token", "")
+            
+            # Update config entry with new tokens
+            new_data = self.entry.data.copy()
+            new_data[CONF_ACCESS_TOKEN] = self.access_token
+            if self.refresh_token:
+                new_data[CONF_REFRESH_TOKEN] = self.refresh_token
+            
+            self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+            
+            _LOGGER.info("Erfolgreich neu authentifiziert")
+            
+            # Dismiss notification if shown
+            if self._token_expired_notified:
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification",
+                        "dismiss",
+                        {"notification_id": f"{DOMAIN}_token_expired"},
+                    )
+                )
+                self._token_expired_notified = False
+            
+        except Exception as e:
+            _LOGGER.error("Re-Authentifizierung fehlgeschlagen: %s", e)
+            raise UpdateFailed(f"Re-Authentifizierung fehlgeschlagen: {e}")
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
