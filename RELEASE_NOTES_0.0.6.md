@@ -41,6 +41,10 @@
 - **„Letzte MQTT Nachricht“**: Zeigt jetzt die Sekunden seit der letzten MQTT-Nachricht (Integer) statt eines Zeitstempels – besser für Verlaufsdiagramme und Statistiken
 - **State Class**: „Letzte MQTT Nachricht“ nutzt `SensorStateClass.MEASUREMENT` für korrekte Auswertung in HA
 
+### Coordinator / MQTT
+- **MQTT-Debounce**: Bei eingehenden MQTT-Nachrichten (z. B. jede Sekunde vom ESP) wird die Aktualisierung der Entities nur noch nach 3 Sekunden Ruhe ausgelöst (Debounce). Der 30-Sekunden-API-Refresh kann so wieder zuverlässig laufen – der Switch „Armed“ und andere API-Werte (z. B. Scharfstellung aus der Cloud) aktualisieren sich ohne Reload.
+- **Stabilerer Coordinator**: Nach dem Debounce wird `async_set_updated_data` korrekt mit `await` aufgerufen.
+
 ### Metadaten & Repository
 - **Manifest**: Dokumentations- und Issue-Tracker-Links zeigen auf `github.com/fabibo89/taubenschiesser`
 - **Codeowner**: Maintainer in `manifest.json` auf @fabibo89 gesetzt
@@ -50,7 +54,7 @@
 
 - **Keine Breaking Changes**: Diese Version ist vollständig kompatibel mit Version 0.0.5
 - **Bestehende Installationen**: Manuelle Installationen (ohne HACS) funktionieren weiterhin unverändert
-- **Neuer Switch „Armed“**: Pro Gerät erscheint nach dem Update ein weiterer Switch; Zustand wird aus der API übernommen
+- **Neuer Switch „Armed“**: Pro Gerät erscheint nach dem Update ein weiterer Switch; Zustand wird aus der API übernommen und bleibt mit der Cloud synchron (auch bei Änderung in der App)
 - **Neuer Sensor**: „WLAN-Signal“ erscheint automatisch, sobald das Gerät WiFi-Daten sendet
 - **„Letzte MQTT Nachricht“**: Anzeige wechselt von Zeitstempel zu Sekunden – Automatisierungen/Dashboards, die den alten Wert nutzen, ggf. anpassen
 

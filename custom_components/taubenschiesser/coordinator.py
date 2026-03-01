@@ -73,6 +73,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         self.mqtt_client: mqtt.Client | None = None
         self.devices: dict[str, dict[str, Any]] = {}
         self.device_positions: dict[str, dict[str, Any]] = {}
+        self._mqtt_debounce_handle: asyncio.TimerHandle | None = None
+        self._mqtt_debounce_seconds: float = 3.0
         self._token_expired_notified = False
 
     async def _ensure_token_valid(self) -> None:
@@ -386,6 +388,24 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         if self.mqtt_broker:
             await self._setup_mqtt()
 
+    def _schedule_mqtt_debounced_update(self) -> None:
+        """Schedule a single coordinator update after a quiet period (debounce)."""
+        if self._mqtt_debounce_handle is not None:
+            self._mqtt_debounce_handle.cancel()
+        self._mqtt_debounce_handle = self.hass.loop.call_later(
+            self._mqtt_debounce_seconds,
+            self._mqtt_debounce_flush,
+        )
+
+    def _mqtt_debounce_flush(self) -> None:
+        """Run after debounce delay; notify entities of MQTT data."""
+        self._mqtt_debounce_handle = None
+        self.hass.async_create_task(self._async_mqtt_flush())
+
+    async def _async_mqtt_flush(self) -> None:
+        """Push current device data to coordinator (called after debounce)."""
+        await self.async_set_updated_data({"devices": self.devices})
+
     def _subscribe_to_devices(self, client: mqtt.Client) -> None:
         """Subscribe to MQTT topics for all devices."""
         for device in self.devices.values():
@@ -444,9 +464,9 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                                 device[ATTR_WIFI] = payload.get("wifi")
                             break
                     
-                    # Trigger coordinator update
+                    # Debounce: notify HA only after a short quiet period (so API refresh can run)
                     self.hass.loop.call_soon_threadsafe(
-                        self.async_set_updated_data, {"devices": self.devices}
+                        self._schedule_mqtt_debounced_update
                     )
             except Exception as err:
                 _LOGGER.error("Error processing MQTT message: %s", err)
@@ -477,6 +497,9 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_shutdown(self) -> None:
         """Shutdown coordinator and MQTT connection."""
+        if self._mqtt_debounce_handle is not None:
+            self._mqtt_debounce_handle.cancel()
+            self._mqtt_debounce_handle = None
         if self.mqtt_client:
             self.mqtt_client.loop_stop()
             self.mqtt_client.disconnect()
