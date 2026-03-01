@@ -1,7 +1,7 @@
 {
   "domain": "taubenschiesser",
   "name": "Taubenschiesser",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "documentation": "https://github.com/your-repo/taubenschiesser",
   "issue_tracker": "https://github.com/your-repo/taubenschiesser/issues",
   "codeowners": [
