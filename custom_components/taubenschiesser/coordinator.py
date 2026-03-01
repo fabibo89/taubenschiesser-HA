@@ -25,6 +25,7 @@ from .const import (
     ATTR_ROTATION,
     ATTR_STATUS,
     ATTR_TILT,
+    ATTR_WIFI,
     CONF_API_URL,
     CONF_ACCESS_TOKEN,
     CONF_REFRESH_TOKEN,
@@ -273,6 +274,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                             # Extract timeMQTT if available
                             if "timeMQTT" in pos_data:
                                 device[ATTR_LAST_MQTT] = pos_data.get("timeMQTT")
+                            if "wifi" in pos_data:
+                                device[ATTR_WIFI] = pos_data.get("wifi")
                         else:
                             device[ATTR_ROTATION] = 0
                             device[ATTR_TILT] = 0
@@ -331,6 +334,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                                             # Extract timeMQTT if available
                                             if "timeMQTT" in pos_data:
                                                 device[ATTR_LAST_MQTT] = pos_data.get("timeMQTT")
+                                            if "wifi" in pos_data:
+                                                device[ATTR_WIFI] = pos_data.get("wifi")
                                         else:
                                             device[ATTR_ROTATION] = 0
                                             device[ATTR_TILT] = 0
@@ -410,7 +415,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                 if len(topic_parts) >= 2:
                     device_ip = topic_parts[1]
                     
-                    # Update position data - extract timeMQTT if available
+                    # Update position data - extract timeMQTT and wifi if available
                     position_data = {
                         "rot": payload.get("Rot", 0),
                         "tilt": payload.get("Tilt", 0),
@@ -421,6 +426,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     # Extract timeMQTT if present
                     if "timeMQTT" in payload:
                         position_data["timeMQTT"] = payload.get("timeMQTT")
+                    if "wifi" in payload:
+                        position_data["wifi"] = payload.get("wifi")
                     
                     self.device_positions[device_ip] = position_data
                     
@@ -433,6 +440,8 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                             # Update timeMQTT if available
                             if "timeMQTT" in payload:
                                 device[ATTR_LAST_MQTT] = payload.get("timeMQTT")
+                            if "wifi" in payload:
+                                device[ATTR_WIFI] = payload.get("wifi")
                             break
                     
                     # Trigger coordinator update

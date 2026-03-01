@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -19,6 +24,7 @@ from .const import (
     ATTR_STATUS,
     ATTR_TILT,
     ATTR_TODAY_DETECTIONS,
+    ATTR_WIFI,
     ATTR_YESTERDAY_DETECTIONS,
     DOMAIN,
 )
@@ -40,7 +46,16 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
     SensorEntityDescription(
         key=ATTR_LAST_MQTT,
         name="Letzte MQTT Nachricht",
+        native_unit_of_measurement="s",
+        state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:clock-outline",
+    ),
+    SensorEntityDescription(
+        key=ATTR_WIFI,
+        name="WLAN-Signal",
+        native_unit_of_measurement="dBm",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        icon="mdi:wifi",
     ),
     SensorEntityDescription(
         key=ATTR_STATUS,
@@ -105,11 +120,17 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
         if device:
             key = self.entity_description.key
             if key == ATTR_LAST_MQTT:
-                # Return timestamp as ISO string or None
+                # Sekunden seit letzter MQTT-Nachricht (Integer für Diagramm)
                 value = device.get(key)
-                if value:
-                    return value
+                if value is not None:
+                    try:
+                        return int(value)
+                    except (TypeError, ValueError):
+                        return None
                 return None
+            elif key == ATTR_WIFI:
+                # WiFi signal strength (dBm), only when sent by device
+                return device.get(key)
             elif key == ATTR_STATUS:
                 # Return status as string
                 return device.get(key, "unknown")
