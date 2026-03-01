@@ -4,6 +4,14 @@
 
 ## 🎉 Neue Features
 
+### 🔫 Switch „Armed“ (Schießen bei Erkennung)
+
+#### Neuer Switch „Armed“ pro Gerät
+- **Schießen bei Erkennung**: Steuert, ob bei einer Taubenerkennung geschossen wird (an) oder nur die Erkennung gespeichert wird (aus)
+- **Synchron mit der Cloud**: Zustand wird aus der API gelesen und Änderungen in HA werden per API (`PATCH …/arm`) an die Taubenschiesser-Cloud gesendet
+- **Anzeige in HA**: Pro Gerät erscheint neben dem bestehenden „Monitor“-Switch ein weiterer Switch „Armed“ (z. B. „Taubenschiesser West Armed“)
+- **Hardware-Monitor**: Der Monitor nutzt den gleichen `monitorArmed`-Wert – Scharfstellung in HA und in der Cloud-Oberfläche bleiben synchron
+
 ### 📡 WLAN-Signal-Sensor
 
 #### Neuer Sensor „WLAN-Signal“
@@ -25,6 +33,10 @@
 
 ## 🔧 Technische Verbesserungen
 
+### Switches
+- **Neue API-Methode**: `send_api_arm(device_id, armed)` im Coordinator für Scharfstellung
+- **Switch-Plattform**: Zwei Switches pro Gerät (Monitor, Armed) über gemeinsame Klasse mit `switch_kind`
+
 ### Sensoren
 - **„Letzte MQTT Nachricht“**: Zeigt jetzt die Sekunden seit der letzten MQTT-Nachricht (Integer) statt eines Zeitstempels – besser für Verlaufsdiagramme und Statistiken
 - **State Class**: „Letzte MQTT Nachricht“ nutzt `SensorStateClass.MEASUREMENT` für korrekte Auswertung in HA
@@ -38,6 +50,7 @@
 
 - **Keine Breaking Changes**: Diese Version ist vollständig kompatibel mit Version 0.0.5
 - **Bestehende Installationen**: Manuelle Installationen (ohne HACS) funktionieren weiterhin unverändert
+- **Neuer Switch „Armed“**: Pro Gerät erscheint nach dem Update ein weiterer Switch; Zustand wird aus der API übernommen
 - **Neuer Sensor**: „WLAN-Signal“ erscheint automatisch, sobald das Gerät WiFi-Daten sendet
 - **„Letzte MQTT Nachricht“**: Anzeige wechselt von Zeitstempel zu Sekunden – Automatisierungen/Dashboards, die den alten Wert nutzen, ggf. anpassen
 

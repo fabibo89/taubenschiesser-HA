@@ -579,3 +579,44 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     )
         except aiohttp.ClientError as err:
             raise Exception(f"Netzwerkfehler beim Senden des Befehls: {err}") from err
+
+    async def send_api_arm(self, device_id: str, armed: bool) -> None:
+        """Set monitor armed state via API (shoot on detection vs. save only)."""
+        if self.refresh_token:
+            await self._ensure_token_valid()
+
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        payload = {"armed": armed}
+        try:
+            async with self.session.patch(
+                f"{self.api_url}/api/device-control/{device_id}/arm",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 401:
+                    if self.refresh_token:
+                        await self._refresh_token()
+                        headers = {"Authorization": f"Bearer {self.access_token}"}
+                        async with self.session.patch(
+                            f"{self.api_url}/api/device-control/{device_id}/arm",
+                            headers=headers,
+                            json=payload,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as retry_response:
+                            if retry_response.status != 200:
+                                error_text = await retry_response.text()
+                                raise Exception(
+                                    f"API armed fehlgeschlagen (Status {retry_response.status}): {error_text}"
+                                )
+                    else:
+                        raise Exception(
+                            "API Token ist abgelaufen. Bitte konfiguriere die Integration neu."
+                        )
+                elif response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(
+                        f"API armed fehlgeschlagen (Status {response.status}): {error_text}"
+                    )
+        except aiohttp.ClientError as err:
+            raise Exception(f"Netzwerkfehler beim Setzen von armed: {err}") from err
