@@ -75,13 +75,18 @@ class TaubenschiesserButton(CoordinatorEntity, ButtonEntity):
             return
 
         try:
+            # Build command (shoot uses device's shootingTimeMs)
+            if self.button_type["key"] == "shoot":
+                duration_ms = device.get("taubenschiesser", {}).get("shootingTimeMs", 500)
+                command = {"type": "shoot", "duration": duration_ms}
+            else:
+                command = self.button_type["command"]
+
             # Try MQTT first if available
             if self.coordinator.mqtt_client and self.coordinator.mqtt_client.is_connected():
-                await self.coordinator.send_mqtt_command(
-                    device_ip, self.button_type["command"]
-                )
+                await self.coordinator.send_mqtt_command(device_ip, command)
             else:
-                # Fallback to API
+                # Fallback to API (backend uses device shootingTimeMs for shoot)
                 action = self.button_type["key"]
                 await self.coordinator.send_api_command(self.device_id, action)
         except Exception as err:
