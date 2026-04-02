@@ -27,7 +27,6 @@ from .const import (
     ATTR_WIFI,
     ATTR_YESTERDAY_DETECTIONS,
     ATTR_DYNAMIC_THRESHOLD,
-    ATTR_MAX_THRESHOLD,
     ATTR_HOLDING,
     DOMAIN,
 )
@@ -76,6 +75,13 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
         name="Erkennungen gestern",
         native_unit_of_measurement="Erkennungen",
         icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key=ATTR_DYNAMIC_THRESHOLD,
+        name="Dyn Wait",
+        native_unit_of_measurement="s",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:timer-sand",
     ),
 )
 
@@ -145,6 +151,16 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
                 # Return yesterday's detection count
                 counts = device.get("detectionCounts", {})
                 return counts.get("yesterday", 0)
+            elif key == ATTR_DYNAMIC_THRESHOLD:
+                hm = device.get("hardwareMonitor", {}) or {}
+                hm_data = hm.get("lastWaitingData") or hm.get("lastEventData", {}) or {}
+                raw = hm_data.get("dynamic_threshold")
+                if raw is None:
+                    return None
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    return None
             else:
                 # Numeric values (rotation, tilt)
                 return device.get(key, 0)
@@ -163,13 +179,9 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
             ATTR_MOVING: device.get(ATTR_MOVING, False),
         }
 
-        # Persisted hardware-monitor event data (optional)
+        # holding: optional context (dyn wait is only on the Dyn Wait sensor state)
         hm = device.get("hardwareMonitor", {}) or {}
-        hm_data = hm.get("lastEventData", {}) or {}
-        if "dynamic_threshold" in hm_data:
-            attrs[ATTR_DYNAMIC_THRESHOLD] = hm_data.get("dynamic_threshold")
-        if "max_threshold" in hm_data:
-            attrs[ATTR_MAX_THRESHOLD] = hm_data.get("max_threshold")
+        hm_data = hm.get("lastWaitingData") or hm.get("lastEventData", {}) or {}
         if "holding" in hm_data:
             attrs[ATTR_HOLDING] = hm_data.get("holding")
 

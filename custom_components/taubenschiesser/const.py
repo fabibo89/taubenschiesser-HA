@@ -42,9 +42,8 @@ ATTR_STATUS: Final = "status"
 ATTR_TODAY_DETECTIONS: Final = "today_detections"
 ATTR_YESTERDAY_DETECTIONS: Final = "yesterday_detections"
 
-# Hardware monitor live attributes (persisted on device by backend)
+# Hardware monitor (persisted on device by backend)
 ATTR_DYNAMIC_THRESHOLD: Final = "dynamic_threshold"
-ATTR_MAX_THRESHOLD: Final = "max_threshold"
 ATTR_HOLDING: Final = "holding"
 
 # Monitor status values
