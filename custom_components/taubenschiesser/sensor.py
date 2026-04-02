@@ -26,6 +26,9 @@ from .const import (
     ATTR_TODAY_DETECTIONS,
     ATTR_WIFI,
     ATTR_YESTERDAY_DETECTIONS,
+    ATTR_DYNAMIC_THRESHOLD,
+    ATTR_MAX_THRESHOLD,
+    ATTR_HOLDING,
     DOMAIN,
 )
 from .coordinator import TaubenschiesserDataUpdateCoordinator
@@ -159,6 +162,16 @@ class TaubenschiesserSensor(CoordinatorEntity, SensorEntity):
             ATTR_MONITOR_STATUS: device.get("monitorStatus", "unknown"),
             ATTR_MOVING: device.get(ATTR_MOVING, False),
         }
+
+        # Persisted hardware-monitor event data (optional)
+        hm = device.get("hardwareMonitor", {}) or {}
+        hm_data = hm.get("lastEventData", {}) or {}
+        if "dynamic_threshold" in hm_data:
+            attrs[ATTR_DYNAMIC_THRESHOLD] = hm_data.get("dynamic_threshold")
+        if "max_threshold" in hm_data:
+            attrs[ATTR_MAX_THRESHOLD] = hm_data.get("max_threshold")
+        if "holding" in hm_data:
+            attrs[ATTR_HOLDING] = hm_data.get("holding")
 
         if device.get("lastSeen"):
             attrs[ATTR_LAST_SEEN] = device["lastSeen"]
