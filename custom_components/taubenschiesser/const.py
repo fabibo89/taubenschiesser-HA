@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "taubenschiesser"
-PLATFORMS: Final = ["sensor", "switch", "button"]
+PLATFORMS: Final = ["sensor", "switch", "button", "binary_sensor"]
 
 # Configuration keys
 CONF_API_URL: Final = "api_url"
@@ -42,6 +42,7 @@ ATTR_LASER: Final = "laser"
 ATTR_SHOOT_USE_LASER: Final = "shoot_use_laser"
 ATTR_SHOOT_USE_AUDIO: Final = "shoot_use_audio"
 ATTR_SHOOT_LASER_BLINK: Final = "shoot_laser_blink"
+ATTR_WATERTANK: Final = "watertank"
 ATTR_STATUS: Final = "status"
 ATTR_TODAY_DETECTIONS: Final = "today_detections"
 ATTR_YESTERDAY_DETECTIONS: Final = "yesterday_detections"

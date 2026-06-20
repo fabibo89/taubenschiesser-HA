@@ -26,6 +26,7 @@ from .const import (
     ATTR_ROTATION,
     ATTR_STATUS,
     ATTR_TILT,
+    ATTR_WATERTANK,
     ATTR_WIFI,
     CONF_API_URL,
     CONF_ACCESS_TOKEN,
@@ -110,6 +111,20 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
             payload["laserBlinkMs"] = min(500, max(20, blink_ms))
 
         return payload
+
+    def _merge_device_telemetry(self, device: dict[str, Any]) -> None:
+        """Merge watertank from MQTT cache or API liveTelemetry (not persisted in MongoDB)."""
+        device_ip = device.get("taubenschiesser", {}).get("ip")
+        watertank = None
+        if device_ip and device_ip in self.device_positions:
+            pos = self.device_positions[device_ip]
+            if "watertank" in pos:
+                watertank = pos.get("watertank")
+        live = device.get("liveTelemetry") or {}
+        if watertank is None and isinstance(live, dict) and "watertank" in live:
+            watertank = live.get("watertank")
+        if watertank is not None:
+            device[ATTR_WATERTANK] = bool(watertank)
 
     async def _ensure_token_valid(self) -> None:
         """Ensure access token is valid, refresh if needed."""
@@ -316,6 +331,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                             device[ATTR_ROTATION] = 0
                             device[ATTR_TILT] = 0
                             device[ATTR_MOVING] = False
+                        self._merge_device_telemetry(device)
                         
                         # Set status - use overall status from device, or calculate from taubenschiesserStatus/cameraStatus
                         device[ATTR_STATUS] = device.get("status", "unknown")
@@ -376,6 +392,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                                             device[ATTR_ROTATION] = 0
                                             device[ATTR_TILT] = 0
                                             device[ATTR_MOVING] = False
+                                        self._merge_device_telemetry(device)
                                         
                                         # Set status
                                         device[ATTR_STATUS] = device.get("status", "unknown")
@@ -498,6 +515,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                                 device[ATTR_LAST_MQTT] = payload.get("timeMQTT")
                             if "wifi" in payload:
                                 device[ATTR_WIFI] = payload.get("wifi")
+                            self._merge_device_telemetry(device)
                             break
                     
                     # Debounce: notify HA only after a short quiet period (so API refresh can run)
