@@ -20,6 +20,7 @@ from .const import (
     ATTR_DEVICE_IP,
     ATTR_LAST_MQTT,
     ATTR_LAST_SEEN,
+    ATTR_LASER,
     ATTR_MONITOR_STATUS,
     ATTR_MOVING,
     ATTR_ROTATION,
@@ -76,6 +77,39 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         self._mqtt_debounce_handle: asyncio.TimerHandle | None = None
         self._mqtt_debounce_seconds: float = 3.0
         self._token_expired_notified = False
+
+    @staticmethod
+    def build_shoot_command(taubenschiesser: dict[str, Any] | None) -> dict[str, Any]:
+        """Build ESP shoot payload from device taubenschiesser settings."""
+        config = taubenschiesser if isinstance(taubenschiesser, dict) else {}
+        duration_ms = config.get("shootingTimeMs", 500)
+        try:
+            duration_ms = max(0, int(duration_ms))
+        except (TypeError, ValueError):
+            duration_ms = 500
+
+        use_laser = config.get("shootUseLaser", True)
+        if use_laser is None:
+            use_laser = True
+        use_audio = bool(config.get("shootUseAudio", False))
+
+        payload: dict[str, Any] = {
+            "type": "shoot",
+            "duration": duration_ms,
+            "useLaser": bool(use_laser),
+            "useAudio": use_audio,
+        }
+
+        if use_laser and config.get("shootLaserBlink"):
+            blink_ms = config.get("shootLaserBlinkMs", 100)
+            try:
+                blink_ms = int(blink_ms)
+            except (TypeError, ValueError):
+                blink_ms = 100
+            payload["laserBlink"] = True
+            payload["laserBlinkMs"] = min(500, max(20, blink_ms))
+
+        return payload
 
     async def _ensure_token_valid(self) -> None:
         """Ensure access token is valid, refresh if needed."""
@@ -442,6 +476,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                         "moving": payload.get("moving", False),
                         "watertank": payload.get("watertank", True),
                         "cam": payload.get("Cam", False),
+                        "laser": payload.get("laser", False),
                     }
                     # Extract timeMQTT if present
                     if "timeMQTT" in payload:
@@ -457,6 +492,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                             device[ATTR_ROTATION] = payload.get("Rot", 0)
                             device[ATTR_TILT] = payload.get("Tilt", 0)
                             device[ATTR_MOVING] = payload.get("moving", False)
+                            device[ATTR_LASER] = payload.get("laser", False)
                             # Update timeMQTT if available
                             if "timeMQTT" in payload:
                                 device[ATTR_LAST_MQTT] = payload.get("timeMQTT")
@@ -643,3 +679,63 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     )
         except aiohttp.ClientError as err:
             raise Exception(f"Netzwerkfehler beim Setzen von armed: {err}") from err
+
+    async def send_api_update_taubenschiesser(
+        self, device_id: str, fields: dict[str, Any]
+    ) -> None:
+        """Update taubenschiesser settings on a device via API."""
+        if self.refresh_token:
+            await self._ensure_token_valid()
+
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        payload = {"taubenschiesser": fields}
+        try:
+            async with self.session.put(
+                f"{self.api_url}/api/devices/{device_id}",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status == 401:
+                    if self.refresh_token:
+                        await self._refresh_token()
+                        headers = {"Authorization": f"Bearer {self.access_token}"}
+                        async with self.session.put(
+                            f"{self.api_url}/api/devices/{device_id}",
+                            headers=headers,
+                            json=payload,
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        ) as retry_response:
+                            if retry_response.status != 200:
+                                error_text = await retry_response.text()
+                                raise Exception(
+                                    f"API Geräte-Update fehlgeschlagen (Status {retry_response.status}): {error_text}"
+                                )
+                    else:
+                        raise Exception(
+                            "API Token ist abgelaufen. Bitte konfiguriere die Integration neu."
+                        )
+                elif response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(
+                        f"API Geräte-Update fehlgeschlagen (Status {response.status}): {error_text}"
+                    )
+        except aiohttp.ClientError as err:
+            raise Exception(f"Netzwerkfehler beim Geräte-Update: {err}") from err
+
+        if device_id in self.devices:
+            current = self.devices[device_id].get("taubenschiesser", {})
+            self.devices[device_id]["taubenschiesser"] = {**current, **fields}
+
+    async def send_esp_device_config(
+        self, device_ip: str, use_laser_on_shoot: bool | None = None, use_audio_on_shoot: bool | None = None
+    ) -> None:
+        """Sync persisted shoot settings to ESP via MQTT config command."""
+        command: dict[str, Any] = {"type": "config"}
+        if use_laser_on_shoot is not None:
+            command["useLaserOnShoot"] = use_laser_on_shoot
+        if use_audio_on_shoot is not None:
+            command["useAudioOnShoot"] = use_audio_on_shoot
+        if len(command) == 1:
+            return
+        await self.send_mqtt_command(device_ip, command)

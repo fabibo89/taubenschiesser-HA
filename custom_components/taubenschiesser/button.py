@@ -75,10 +75,9 @@ class TaubenschiesserButton(CoordinatorEntity, ButtonEntity):
             return
 
         try:
-            # Build command (shoot uses device's shootingTimeMs)
             if self.button_type["key"] == "shoot":
-                duration_ms = device.get("taubenschiesser", {}).get("shootingTimeMs", 500)
-                command = {"type": "shoot", "duration": duration_ms}
+                taubenschiesser = device.get("taubenschiesser", {})
+                command = self.coordinator.build_shoot_command(taubenschiesser)
             else:
                 command = self.button_type["command"]
 
