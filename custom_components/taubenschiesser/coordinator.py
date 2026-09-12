@@ -478,9 +478,35 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
     async def async_config_entry_first_refresh(self) -> None:
         """Refresh data for the first time and setup MQTT if configured."""
         await super().async_config_entry_first_refresh()
-        
+
         if self.mqtt_broker:
-            await self._setup_mqtt()
+            try:
+                await self._setup_mqtt()
+            except Exception as err:
+                _LOGGER.error(
+                    "MQTT broker %s:%s not reachable (%s). "
+                    "Integration continues without live updates — "
+                    "fix the broker under Neu konfigurieren or leave MQTT empty.",
+                    self.mqtt_broker,
+                    self.mqtt_port,
+                    err,
+                )
+                await self._teardown_mqtt()
+
+    async def _teardown_mqtt(self) -> None:
+        """Drop a half-open MQTT client so setup can continue."""
+        client = self.mqtt_client
+        self.mqtt_client = None
+        if client is None:
+            return
+        try:
+            await self.hass.async_add_executor_job(client.loop_stop)
+        except Exception:
+            pass
+        try:
+            await self.hass.async_add_executor_job(client.disconnect)
+        except Exception:
+            pass
 
     def _schedule_mqtt_debounced_update(self) -> None:
         """Schedule a single coordinator update after a quiet period (debounce)."""

@@ -19,7 +19,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Taubenschiesser from a config entry."""
     coordinator = TaubenschiesserDataUpdateCoordinator(hass, entry)
     api_url = coordinator.api_url
-    _LOGGER.info("Connecting to Taubenschiesser API at %s", api_url)
+    mqtt_broker = coordinator.mqtt_broker
+    _LOGGER.info(
+        "Connecting to Taubenschiesser API at %s (MQTT broker: %s)",
+        api_url,
+        mqtt_broker or "disabled",
+    )
 
     try:
         await coordinator.async_config_entry_first_refresh()
@@ -31,12 +36,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         raise
     except Exception as err:
-        _LOGGER.error(
-            "Cannot connect to Taubenschiesser API at %s: %s",
+        _LOGGER.exception(
+            "Unexpected setup error (API %s, MQTT %s): %s",
             api_url,
+            mqtt_broker or "disabled",
             err,
         )
-        raise ConfigEntryNotReady(f"Error connecting to API ({api_url}): {err}") from err
+        raise ConfigEntryNotReady(
+            f"Error connecting to API ({api_url}), MQTT ({mqtt_broker}): {err}"
+        ) from err
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
