@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 from typing import Any
 
 import aiohttp
@@ -36,6 +37,13 @@ _LOGGER = logging.getLogger(__name__)
 def _normalize_api_url(api_url: str) -> str:
     """Strip whitespace and trailing slash from API URL."""
     return normalize_api_url(api_url)
+
+
+def _client_session() -> aiohttp.ClientSession:
+    """HTTP session forced to IPv4 (avoids HA/Docker getaddrinfo errno -5)."""
+    return aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(family=socket.AF_INET),
+    )
 
 
 def _build_entry_data(
@@ -79,7 +87,7 @@ def _build_entry_data(
 async def validate_login(api_url: str, email: str, password: str) -> dict[str, str]:
     """Validate login and get tokens."""
     try:
-        async with aiohttp.ClientSession() as session:
+        async with _client_session() as session:
             async with session.post(
                 f"{api_url.rstrip('/')}{API_ENDPOINT_AUTH}",
                 json={"email": email, "password": password},
@@ -128,7 +136,7 @@ async def validate_api_connection(api_url: str, access_token: str) -> bool:
     """Validate API connection with access token."""
     try:
         headers = {"Authorization": f"Bearer {access_token}"}
-        async with aiohttp.ClientSession() as session:
+        async with _client_session() as session:
             async with session.get(
                 f"{api_url.rstrip('/')}{API_ENDPOINT_DEVICES}",
                 headers=headers,

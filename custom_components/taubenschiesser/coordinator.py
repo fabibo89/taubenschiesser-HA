@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import socket
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -63,7 +64,10 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         # Token management (kept in memory; URL/MQTT always read from entry)
         self.access_token = entry.data[CONF_ACCESS_TOKEN]
         self.refresh_token = entry.data.get(CONF_REFRESH_TOKEN)
-        self.session = async_get_clientsession(hass)
+        try:
+            self.session = async_get_clientsession(hass, family=socket.AF_INET)
+        except TypeError:
+            self.session = async_get_clientsession(hass)
 
         self.mqtt_broker = entry.data.get(CONF_MQTT_BROKER)
         self.mqtt_port = entry.data.get(CONF_MQTT_PORT, 1883)

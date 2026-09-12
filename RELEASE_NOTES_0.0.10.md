@@ -41,6 +41,7 @@ Der Coordinator hat die API-URL bisher nur **beim Start** gespeichert. Nach eine
 
 - Fehlt das Schema, wird **`http://` automatisch ergänzt** (`192.168.10.73:5001` → `http://192.168.10.73:5001`). Ohne Schema scheitert DNS mit *Name has no usable address*.
 - Verbindungsfehler schreiben jetzt die **tatsächliche API-URL** ins Home-Assistant-Protokoll (Logger `custom_components.taubenschiesser`). Einrichtungsfehler (`ConfigEntryNotReady`) waren bisher unsichtbar.
+- API-HTTP-Requests nutzen **IPv4** (`AF_INET`). In Home Assistant / Docker schlägt `getaddrinfo` sonst oft mit `[Errno -5] Name has no usable address` fehl, obwohl die URL eine IPv4-Adresse ist.
 
 ### Auth-Fehlerbehandlung
 
