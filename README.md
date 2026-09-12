@@ -92,6 +92,12 @@ Wenn Home Assistant in Docker läuft, funktioniert `localhost` **nicht**! Verwen
 - Access Tokens werden automatisch erneuert, wenn sie ablaufen
 - Keine manuelle Token-Verwaltung mehr nötig!
 
+### Neu konfigurieren (Server-Umzug)
+
+Unter **Einstellungen → Geräte & Dienste → Taubenschiesser → Neu konfigurieren** können API-URL, Login und MQTT geändert werden, ohne die Integration zu löschen. Entities und Dashboards bleiben erhalten. Passwort und MQTT-Passwort leer lassen, um die gespeicherten Werte zu behalten.
+
+**Voraussetzung:** Home Assistant 2024.11 oder neuer.
+
 ## Verwendung
 
 Nach der Konfiguration werden automatisch für jedes Gerät folgende Entities erstellt. Alle Entities werden automatisch dem entsprechenden Gerät zugeordnet und erscheinen gruppiert in der Home Assistant Geräteübersicht.

@@ -22,15 +22,39 @@
           "mqtt_username": "Benutzername für MQTT.\n\n**Optional** - Nur wenn dein MQTT-Broker Authentifizierung benötigt.",
           "mqtt_password": "Passwort für MQTT.\n\n**Optional** - Nur wenn dein MQTT-Broker Authentifizierung benötigt."
         }
+      },
+      "reconfigure": {
+        "title": "Taubenschiesser neu konfigurieren",
+        "description": "Aktualisiere API-URL, Anmeldedaten oder MQTT nach einem Server-Umzug.\n\nPasswort und MQTT-Passwort leer lassen, um die gespeicherten Werte zu behalten.",
+        "data": {
+          "api_url": "API URL",
+          "email": "E-Mail",
+          "password": "Passwort",
+          "mqtt_broker": "MQTT Broker (optional)",
+          "mqtt_port": "MQTT Port",
+          "mqtt_username": "MQTT Benutzername (optional)",
+          "mqtt_password": "MQTT Passwort (optional)"
+        },
+        "data_description": {
+          "api_url": "Die URL deines Taubenschiesser-Servers.\n\n**Beispiele:**\n• HA in Docker (macOS/Windows): http://host.docker.internal:5001\n• HA in Docker (Linux): http://[Host-IP]:5001\n• HA nativ: http://localhost:5001\n• Im Netzwerk: http://192.168.1.100:5001",
+          "email": "Deine E-Mail-Adresse für die Anmeldung am Taubenschiesser-Server.",
+          "password": "Leer lassen, um das gespeicherte Passwort weiter zu verwenden.",
+          "mqtt_broker": "IP-Adresse oder Hostname des MQTT-Brokers.\n\n**Optional** — leer lassen, um MQTT zu deaktivieren.",
+          "mqtt_port": "Port des MQTT-Brokers.\n\n**Standard:** 1883 (unverschlüsselt)\n**SSL/TLS:** 8883 (für Cloud-Services)",
+          "mqtt_username": "Benutzername für MQTT.\n\n**Optional** — leer lassen, um den gespeicherten Wert zu behalten.",
+          "mqtt_password": "Passwort für MQTT.\n\n**Optional** — leer lassen, um das gespeicherte MQTT-Passwort zu behalten."
+        }
       }
     },
     "error": {
       "cannot_connect": "Verbindung zur API fehlgeschlagen",
       "invalid_auth": "Ungültiger API Token",
+      "password_required": "Bitte Passwort eingeben (kein gespeichertes Passwort vorhanden)",
       "unknown": "Unbekannter Fehler"
     },
     "abort": {
-      "already_configured": "Integration ist bereits konfiguriert"
+      "already_configured": "Integration ist bereits konfiguriert",
+      "reconfigure_successful": "Neu-Konfiguration erfolgreich"
     }
   }
 }

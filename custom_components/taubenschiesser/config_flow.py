@@ -32,6 +32,49 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _normalize_api_url(api_url: str) -> str:
+    """Strip whitespace and trailing slash from API URL."""
+    return api_url.strip().rstrip("/")
+
+
+def _build_entry_data(
+    *,
+    api_url: str,
+    email: str,
+    password: str,
+    tokens: dict[str, str],
+    user_input: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build config entry data from form input and login tokens."""
+    data = {
+        CONF_API_URL: api_url,
+        CONF_EMAIL: email,
+        CONF_PASSWORD: password,
+        CONF_ACCESS_TOKEN: tokens["access_token"],
+        CONF_REFRESH_TOKEN: tokens["refresh_token"],
+    }
+    broker = (user_input.get(CONF_MQTT_BROKER) or "").strip()
+    if not broker:
+        return data
+
+    data[CONF_MQTT_BROKER] = broker
+    data[CONF_MQTT_PORT] = user_input.get(CONF_MQTT_PORT, DEFAULT_MQTT_PORT)
+
+    username = (user_input.get(CONF_MQTT_USERNAME) or "").strip()
+    mqtt_password = user_input.get(CONF_MQTT_PASSWORD) or ""
+    if previous:
+        if not username:
+            username = previous.get(CONF_MQTT_USERNAME) or ""
+        if not mqtt_password:
+            mqtt_password = previous.get(CONF_MQTT_PASSWORD) or ""
+    if username:
+        data[CONF_MQTT_USERNAME] = username
+    if mqtt_password:
+        data[CONF_MQTT_PASSWORD] = mqtt_password
+    return data
+
+
 async def validate_login(api_url: str, email: str, password: str) -> dict[str, str]:
     """Validate login and get tokens."""
     try:
@@ -73,6 +116,8 @@ async def validate_login(api_url: str, email: str, password: str) -> dict[str, s
     except aiohttp.ClientError as err:
         _LOGGER.error("API connection error: %s", err)
         raise CannotConnect(f"Netzwerkfehler: {err}")
+    except InvalidAuth:
+        raise
     except Exception as err:
         _LOGGER.error("Unexpected error: %s", err)
         raise CannotConnect(f"Unerwarteter Fehler: {err}")
@@ -94,6 +139,8 @@ async def validate_api_connection(api_url: str, access_token: str) -> bool:
                     raise InvalidAuth
                 else:
                     raise CannotConnect
+    except InvalidAuth:
+        raise
     except (aiohttp.ClientConnectorError, aiohttp.ClientError, Exception) as err:
         _LOGGER.error("API connection error: %s", err)
         raise CannotConnect(f"Verbindung fehlgeschlagen: {err}")
@@ -136,30 +183,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                # Check if already configured
-                await self.async_set_unique_id(user_input[CONF_API_URL])
+                api_url = _normalize_api_url(user_input[CONF_API_URL])
+                await self.async_set_unique_id(api_url)
                 self._abort_if_unique_id_configured()
 
-                # Store tokens in config entry
-                config_data = {
-                    CONF_API_URL: user_input[CONF_API_URL],
-                    CONF_EMAIL: user_input[CONF_EMAIL],
-                    CONF_PASSWORD: user_input[CONF_PASSWORD],  # Store password for automatic re-authentication
-                    CONF_ACCESS_TOKEN: tokens["access_token"],
-                    CONF_REFRESH_TOKEN: tokens["refresh_token"],
-                }
-                
-                # Add MQTT config if provided
-                if user_input.get(CONF_MQTT_BROKER):
-                    config_data[CONF_MQTT_BROKER] = user_input[CONF_MQTT_BROKER]
-                    config_data[CONF_MQTT_PORT] = user_input.get(CONF_MQTT_PORT, DEFAULT_MQTT_PORT)
-                    if user_input.get(CONF_MQTT_USERNAME):
-                        config_data[CONF_MQTT_USERNAME] = user_input[CONF_MQTT_USERNAME]
-                    if user_input.get(CONF_MQTT_PASSWORD):
-                        config_data[CONF_MQTT_PASSWORD] = user_input[CONF_MQTT_PASSWORD]
+                config_data = _build_entry_data(
+                    api_url=api_url,
+                    email=user_input[CONF_EMAIL],
+                    password=user_input[CONF_PASSWORD],
+                    tokens=tokens,
+                    user_input=user_input,
+                )
 
                 return self.async_create_entry(
-                    title=f"Taubenschiesser ({user_input[CONF_API_URL]})",
+                    title=f"Taubenschiesser ({api_url})",
                     data=config_data,
                 )
 
@@ -193,6 +230,92 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "api_url_example": suggested_api_url,
             },
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration after a server move or credential change."""
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            password = user_input.get(CONF_PASSWORD) or entry.data.get(CONF_PASSWORD)
+            if not password:
+                errors[CONF_PASSWORD] = "password_required"
+            else:
+                try:
+                    tokens = await validate_login(
+                        user_input[CONF_API_URL],
+                        user_input[CONF_EMAIL],
+                        password,
+                    )
+                    await validate_api_connection(
+                        user_input[CONF_API_URL],
+                        tokens["access_token"],
+                    )
+                except CannotConnect as err:
+                    error_msg = str(err) if str(err) else "cannot_connect"
+                    errors["base"] = (
+                        error_msg if error_msg != "cannot_connect" else "cannot_connect"
+                    )
+                except InvalidAuth:
+                    errors["base"] = "invalid_auth"
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during reconfigure")
+                    errors["base"] = "unknown"
+                else:
+                    api_url = _normalize_api_url(user_input[CONF_API_URL])
+                    for other in self.hass.config_entries.async_entries(DOMAIN):
+                        if (
+                            other.entry_id != entry.entry_id
+                            and other.unique_id == api_url
+                        ):
+                            return self.async_abort(reason="already_configured")
+
+                    config_data = _build_entry_data(
+                        api_url=api_url,
+                        email=user_input[CONF_EMAIL],
+                        password=password,
+                        tokens=tokens,
+                        user_input=user_input,
+                        previous=dict(entry.data),
+                    )
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        unique_id=api_url,
+                        title=f"Taubenschiesser ({api_url})",
+                        data=config_data,
+                    )
+
+        source = user_input if user_input is not None else entry.data
+        data_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_API_URL, default=source.get(CONF_API_URL, "")
+                ): str,
+                vol.Required(CONF_EMAIL, default=source.get(CONF_EMAIL, "")): str,
+                vol.Optional(CONF_PASSWORD): str,
+                vol.Optional(
+                    CONF_MQTT_BROKER,
+                    default=source.get(CONF_MQTT_BROKER, ""),
+                ): str,
+                vol.Optional(
+                    CONF_MQTT_PORT,
+                    default=source.get(CONF_MQTT_PORT, DEFAULT_MQTT_PORT),
+                ): int,
+                vol.Optional(
+                    CONF_MQTT_USERNAME,
+                    default=source.get(CONF_MQTT_USERNAME, ""),
+                ): str,
+                vol.Optional(CONF_MQTT_PASSWORD): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
         )
 
 
