@@ -58,19 +58,17 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         )
         self.hass = hass
         self.entry = entry
-        self.api_url = entry.data[CONF_API_URL].rstrip("/")
-        
-        # Token management
+
+        # Token management (kept in memory; URL/MQTT always read from entry)
         self.access_token = entry.data[CONF_ACCESS_TOKEN]
         self.refresh_token = entry.data.get(CONF_REFRESH_TOKEN)
-        self.email = entry.data.get(CONF_EMAIL)  # For re-authentication
-        self.password = entry.data.get(CONF_PASSWORD)  # For re-authentication
         self.session = async_get_clientsession(hass)
-        
+
         self.mqtt_broker = entry.data.get(CONF_MQTT_BROKER)
         self.mqtt_port = entry.data.get(CONF_MQTT_PORT, 1883)
         self.mqtt_username = entry.data.get(CONF_MQTT_USERNAME)
         self.mqtt_password = entry.data.get(CONF_MQTT_PASSWORD)
+        self.connection_key = self._connection_key_from_entry()
         
         self.mqtt_client: mqtt.Client | None = None
         self.devices: dict[str, dict[str, Any]] = {}
@@ -78,6 +76,35 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         self._mqtt_debounce_handle: asyncio.TimerHandle | None = None
         self._mqtt_debounce_seconds: float = 3.0
         self._token_expired_notified = False
+
+    @property
+    def api_url(self) -> str:
+        """Current API URL from the config entry (picks up reconfigure without stale cache)."""
+        return str(self.entry.data[CONF_API_URL]).rstrip("/")
+
+    @property
+    def email(self) -> str | None:
+        """Login email from the config entry."""
+        return self.entry.data.get(CONF_EMAIL)
+
+    @property
+    def password(self) -> str | None:
+        """Login password from the config entry."""
+        return self.entry.data.get(CONF_PASSWORD)
+
+    def _connection_key_from_entry(self) -> tuple:
+        """Settings that require a full reload when they change."""
+        return (
+            str(self.entry.data.get(CONF_API_URL, "")).rstrip("/"),
+            self.entry.data.get(CONF_MQTT_BROKER),
+            self.entry.data.get(CONF_MQTT_PORT),
+            self.entry.data.get(CONF_MQTT_USERNAME),
+            self.entry.data.get(CONF_MQTT_PASSWORD),
+        )
+
+    def connection_settings_changed(self) -> bool:
+        """Return True if API URL or MQTT settings changed on the config entry."""
+        return self.connection_key != self._connection_key_from_entry()
 
     @staticmethod
     def build_shoot_command(taubenschiesser: dict[str, Any] | None) -> dict[str, Any]:
@@ -174,12 +201,12 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     if new_refresh_token:
                         self.refresh_token = new_refresh_token
                     
-                    # Update config entry with new tokens
-                    new_data = self.entry.data.copy()
+                    # Update config entry with new tokens (keep current URL/MQTT)
+                    new_data = dict(self.entry.data)
                     new_data[CONF_ACCESS_TOKEN] = self.access_token
                     if new_refresh_token:
                         new_data[CONF_REFRESH_TOKEN] = self.refresh_token
-                    
+
                     self.hass.config_entries.async_update_entry(self.entry, data=new_data)
                     
                     _LOGGER.debug("Token erfolgreich aktualisiert")
@@ -261,12 +288,12 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
             self.access_token = tokens["access_token"]
             self.refresh_token = tokens.get("refresh_token", "")
             
-            # Update config entry with new tokens
-            new_data = self.entry.data.copy()
+            # Update config entry with new tokens (keep current URL/MQTT)
+            new_data = dict(self.entry.data)
             new_data[CONF_ACCESS_TOKEN] = self.access_token
             if self.refresh_token:
                 new_data[CONF_REFRESH_TOKEN] = self.refresh_token
-            
+
             self.hass.config_entries.async_update_entry(self.entry, data=new_data)
             
             _LOGGER.info("Erfolgreich neu authentifiziert")
@@ -289,6 +316,10 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API."""
         try:
+            # Pick up tokens written by reconfigure if this coordinator was not reloaded yet
+            self.access_token = self.entry.data.get(CONF_ACCESS_TOKEN, self.access_token)
+            self.refresh_token = self.entry.data.get(CONF_REFRESH_TOKEN, self.refresh_token)
+
             # Ensure token is valid (will refresh if needed)
             if self.refresh_token:
                 await self._ensure_token_valid()

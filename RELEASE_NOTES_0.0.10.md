@@ -29,6 +29,14 @@ Verhalten:
 
 **Voraussetzung:** Home Assistant **2024.11** oder neuer (sonst erscheint der Button „Neu konfigurieren“ nicht).
 
+### API-URL nach Neu-Konfigurieren (Bugfix)
+
+Der Coordinator hat die API-URL bisher nur **beim Start** gespeichert. Nach einem Server-Umzug lief der Token-Refresh weiter gegen die **alte** URL (z. B. `localhost:5001`).
+
+- API-URL, E-Mail und Passwort kommen jetzt **live** aus der Config Entry.
+- Wechsel von API-URL oder MQTT löst ein Reload aus; reiner Token-Refresh nicht.
+- Token-Updates überschreiben die neue URL nicht mehr.
+
 ### Auth-Fehlerbehandlung
 
 `InvalidAuth` (z. B. HTTP 401) wird im Config-Flow nicht mehr als allgemeiner Verbindungsfehler verschluckt. Falsche Anmeldedaten erscheinen als **ungültige Anmeldedaten**.
@@ -45,6 +53,7 @@ Verhalten:
 2. **Home Assistant neu starten**.
 3. Nach einem Server-Umzug: **Neu konfigurieren** wählen und die neue API-URL (sowie ggf. MQTT) eintragen.
 4. Passwort nur eingeben, wenn es sich geändert hat oder keines gespeichert ist.
+5. Danach **Integration neu laden** (oder Home Assistant neu starten), damit der Coordinator die neue URL nutzt.
 
 **Hinweis:** Die Integration muss nicht mehr gelöscht und neu hinzugefügt werden. Das war der bisherige Workaround und würde bei neuen Cloud-`device_id`s Lovelace-Entities zerreißen.
 
@@ -55,6 +64,7 @@ Verhalten:
 | Thema | Inhalt |
 |--------|--------|
 | HA | Reconfigure-Flow: API-URL, Login, MQTT ohne Löschen der Integration |
+| Bugfix | Coordinator nutzt die aktuelle API-URL (kein Cache auf localhost nach Umzug) |
 | Unique-ID | folgt der API-URL nach Umzug |
 | MQTT | Broker leer = MQTT aus; leere Credentials = gespeicherte Werte |
 | HA-Version | 2024.11+ für den Button „Neu konfigurieren“ |
