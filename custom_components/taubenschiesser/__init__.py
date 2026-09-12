@@ -18,11 +18,25 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Taubenschiesser from a config entry."""
     coordinator = TaubenschiesserDataUpdateCoordinator(hass, entry)
-    
+    api_url = coordinator.api_url
+    _LOGGER.info("Connecting to Taubenschiesser API at %s", api_url)
+
     try:
         await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady as err:
+        _LOGGER.error(
+            "Cannot connect to Taubenschiesser API at %s: %s",
+            api_url,
+            err,
+        )
+        raise
     except Exception as err:
-        raise ConfigEntryNotReady(f"Error connecting to API: {err}") from err
+        _LOGGER.error(
+            "Cannot connect to Taubenschiesser API at %s: %s",
+            api_url,
+            err,
+        )
+        raise ConfigEntryNotReady(f"Error connecting to API ({api_url}): {err}") from err
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator

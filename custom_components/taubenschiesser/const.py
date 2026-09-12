@@ -15,6 +15,15 @@ CONF_MQTT_PORT: Final = "mqtt_port"
 CONF_MQTT_USERNAME: Final = "mqtt_username"
 CONF_MQTT_PASSWORD: Final = "mqtt_password"
 
+
+def normalize_api_url(api_url: str) -> str:
+    """Strip whitespace/slash and add http:// if the scheme is missing."""
+    url = (api_url or "").strip().rstrip("/")
+    if url and "://" not in url:
+        url = f"http://{url}"
+    return url
+
+
 # Defaults
 DEFAULT_MQTT_PORT: Final = 1883
 DEFAULT_UPDATE_INTERVAL: Final = 30

@@ -37,6 +37,11 @@ Der Coordinator hat die API-URL bisher nur **beim Start** gespeichert. Nach eine
 - Wechsel von API-URL oder MQTT löst ein Reload aus; reiner Token-Refresh nicht.
 - Token-Updates überschreiben die neue URL nicht mehr.
 
+### API-URL ohne `http://` und Logging
+
+- Fehlt das Schema, wird **`http://` automatisch ergänzt** (`192.168.10.73:5001` → `http://192.168.10.73:5001`). Ohne Schema scheitert DNS mit *Name has no usable address*.
+- Verbindungsfehler schreiben jetzt die **tatsächliche API-URL** ins Home-Assistant-Protokoll (Logger `custom_components.taubenschiesser`). Einrichtungsfehler (`ConfigEntryNotReady`) waren bisher unsichtbar.
+
 ### Auth-Fehlerbehandlung
 
 `InvalidAuth` (z. B. HTTP 401) wird im Config-Flow nicht mehr als allgemeiner Verbindungsfehler verschluckt. Falsche Anmeldedaten erscheinen als **ungültige Anmeldedaten**.
@@ -51,7 +56,7 @@ Der Coordinator hat die API-URL bisher nur **beim Start** gespeichert. Nach eine
 
 1. **Integration** aktualisieren (HACS oder `custom_components` kopieren).
 2. **Home Assistant neu starten**.
-3. Nach einem Server-Umzug: **Neu konfigurieren** wählen und die neue API-URL (sowie ggf. MQTT) eintragen.
+3. Nach einem Server-Umzug: **Neu konfigurieren** wählen und die neue API-URL **mit** `http://` eintragen (z. B. `http://192.168.10.73:5001`).
 4. Passwort nur eingeben, wenn es sich geändert hat oder keines gespeichert ist.
 5. Danach **Integration neu laden** (oder Home Assistant neu starten), damit der Coordinator die neue URL nutzt.
 
@@ -64,7 +69,7 @@ Der Coordinator hat die API-URL bisher nur **beim Start** gespeichert. Nach eine
 | Thema | Inhalt |
 |--------|--------|
 | HA | Reconfigure-Flow: API-URL, Login, MQTT ohne Löschen der Integration |
-| Bugfix | Coordinator nutzt die aktuelle API-URL (kein Cache auf localhost nach Umzug) |
+| Bugfix | Coordinator nutzt die aktuelle API-URL; fehlendes `http://` wird ergänzt; Fehler mit URL im Log |
 | Unique-ID | folgt der API-URL nach Umzug |
 | MQTT | Broker leer = MQTT aus; leere Credentials = gespeicherte Werte |
 | HA-Version | 2024.11+ für den Button „Neu konfigurieren“ |

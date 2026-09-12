@@ -37,6 +37,7 @@ from .const import (
     CONF_MQTT_PASSWORD,
     CONF_MQTT_PORT,
     CONF_MQTT_USERNAME,
+    normalize_api_url,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     MQTT_TOPIC_STATUS,
@@ -80,7 +81,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
     @property
     def api_url(self) -> str:
         """Current API URL from the config entry (picks up reconfigure without stale cache)."""
-        return str(self.entry.data[CONF_API_URL]).rstrip("/")
+        return normalize_api_url(str(self.entry.data[CONF_API_URL]))
 
     @property
     def email(self) -> str | None:
@@ -95,7 +96,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
     def _connection_key_from_entry(self) -> tuple:
         """Settings that require a full reload when they change."""
         return (
-            str(self.entry.data.get(CONF_API_URL, "")).rstrip("/"),
+            normalize_api_url(str(self.entry.data.get(CONF_API_URL, ""))),
             self.entry.data.get(CONF_MQTT_BROKER),
             self.entry.data.get(CONF_MQTT_PORT),
             self.entry.data.get(CONF_MQTT_USERNAME),
@@ -173,7 +174,7 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("Access Token abgelaufen, versuche Refresh")
                     await self._refresh_token()
         except Exception as e:
-            _LOGGER.debug("Fehler beim Token-Check: %s", e)
+            _LOGGER.warning("Fehler beim Token-Check gegen %s: %s", self.api_url, e)
             # Try refresh anyway if we have refresh token
             if self.refresh_token:
                 await self._refresh_token()
@@ -461,7 +462,14 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
                         f"API-Fehler (Status {response.status}): {error_text}"
                     )
         except aiohttp.ClientError as err:
-            raise UpdateFailed(f"Netzwerkfehler bei API-Verbindung: {err}") from err
+            _LOGGER.error(
+                "Netzwerkfehler bei API-Verbindung zu %s: %s",
+                self.api_url,
+                err,
+            )
+            raise UpdateFailed(
+                f"Netzwerkfehler bei API-Verbindung ({self.api_url}): {err}"
+            ) from err
 
     async def async_config_entry_first_refresh(self) -> None:
         """Refresh data for the first time and setup MQTT if configured."""

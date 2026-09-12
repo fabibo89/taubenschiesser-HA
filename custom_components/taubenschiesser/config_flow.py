@@ -27,6 +27,7 @@ from .const import (
     API_ENDPOINT_DEVICES,
     API_ENDPOINT_AUTH,
     API_ENDPOINT_REFRESH,
+    normalize_api_url,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def _normalize_api_url(api_url: str) -> str:
     """Strip whitespace and trailing slash from API URL."""
-    return api_url.strip().rstrip("/")
+    return normalize_api_url(api_url)
 
 
 def _build_entry_data(
