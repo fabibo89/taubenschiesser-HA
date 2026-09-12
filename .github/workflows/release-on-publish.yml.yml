@@ -43,7 +43,36 @@ jobs:
           git push origin ":refs/tags/$TAG"
           git push origin "$TAG"
           git push origin HEAD:main
-      - name: Create/Update GitHub Release
+      - name: Resolve release notes file
+        id: notes
+        run: |
+          VER="${{ steps.ver.outputs.ver }}"
+          TAG="${{ steps.ver.outputs.tag }}"
+          for f in \
+            "RELEASE_NOTES_${VER}.md" \
+            "RELEASE_NOTES_${TAG}.md" \
+            "docs/releases/${TAG}.md" \
+            "docs/releases/${VER}.md"
+          do
+            if [[ -f "$f" ]]; then
+              echo "path=$f" >> $GITHUB_OUTPUT
+              echo "Using notes file: $f"
+              exit 0
+            fi
+          done
+          echo "path=" >> $GITHUB_OUTPUT
+          echo "No RELEASE_NOTES file found; GitHub auto notes as fallback."
+      - name: Create/Update GitHub Release (with RELEASE_NOTES)
+        if: steps.notes.outputs.path != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
+          body_path: ${{ steps.notes.outputs.path }}
+          draft: false
+          prerelease: false
+      - name: Create/Update GitHub Release (auto notes fallback)
+        if: steps.notes.outputs.path == ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}

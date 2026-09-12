@@ -1,0 +1,49 @@
+name: Fill release notes from docs
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set release body from RELEASE_NOTES_<version>.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          VER="${TAG#v}"
+
+          # Prefer root RELEASE_NOTES_0.0.x.md, then docs/releases/ (plantbot-style).
+          CANDIDATES=(
+            "RELEASE_NOTES_${VER}.md"
+            "RELEASE_NOTES_${TAG}.md"
+            "docs/releases/${TAG}.md"
+            "docs/releases/${VER}.md"
+          )
+
+          NOTES_FILE=""
+          for f in "${CANDIDATES[@]}"; do
+            if [[ -f "$f" ]]; then
+              NOTES_FILE="$f"
+              break
+            fi
+          done
+
+          if [[ -z "$NOTES_FILE" ]]; then
+            echo "No matching notes file for tag ${TAG} (tried: ${CANDIDATES[*]}). Leaving release body unchanged."
+            exit 0
+          fi
+
+          echo "Using notes file: ${NOTES_FILE}"
+          gh release edit "$TAG" --notes-file "$NOTES_FILE"
+          echo "Release body updated for ${TAG}."
