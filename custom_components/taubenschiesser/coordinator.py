@@ -826,3 +826,49 @@ class TaubenschiesserDataUpdateCoordinator(DataUpdateCoordinator):
         if len(command) == 1:
             return
         await self.send_mqtt_command(device_ip, command)
+
+    async def async_fetch_camera_jpeg(
+        self, device_id: str, camera_id: str | None
+    ) -> bytes | None:
+        """Fetch a JPEG still via the backend snapshot API (master or slave)."""
+        if self.refresh_token:
+            await self._ensure_token_valid()
+        params: dict[str, str] = {}
+        if camera_id:
+            params["cameraId"] = camera_id
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        try:
+            async with self.session.get(
+                f"{self.api_url}/api/device-image/{device_id}",
+                headers=headers,
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=25),
+            ) as response:
+                if response.status != 200:
+                    body = await response.text()
+                    _LOGGER.warning(
+                        "Camera snapshot failed for %s cameraId=%s: HTTP %s %s",
+                        device_id,
+                        camera_id,
+                        response.status,
+                        body[:200],
+                    )
+                    return None
+                content_type = (response.headers.get("Content-Type") or "").lower()
+                data = await response.read()
+                if "json" in content_type:
+                    _LOGGER.warning(
+                        "Camera snapshot returned JSON for %s cameraId=%s",
+                        device_id,
+                        camera_id,
+                    )
+                    return None
+                return data
+        except aiohttp.ClientError as err:
+            _LOGGER.warning(
+                "Camera snapshot network error for %s cameraId=%s: %s",
+                device_id,
+                camera_id,
+                err,
+            )
+            return None

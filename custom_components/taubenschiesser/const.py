@@ -2,7 +2,7 @@
 from typing import Final
 
 DOMAIN: Final = "taubenschiesser"
-PLATFORMS: Final = ["sensor", "switch", "button", "binary_sensor"]
+PLATFORMS: Final = ["sensor", "switch", "button", "binary_sensor", "camera"]
 
 # Configuration keys
 CONF_API_URL: Final = "api_url"
